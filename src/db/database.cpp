@@ -3,6 +3,8 @@
 
 #include "config.hpp"
 
+#include <spdlog/spdlog.h>
+
 std::string conninfo_for_database(const std::string& database_name) {
     return "host=" + std::string(config::APP_DATABASE_HOST) +
            " port=" + std::string(config::APP_DATABASE_PORT) +

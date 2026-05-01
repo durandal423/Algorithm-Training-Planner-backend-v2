@@ -68,4 +68,13 @@ struct Submission {
     std::vector<SubmissionResult> results;
 };
 
+struct SubmissionFilter {
+    std::optional<long long> problem_id;
+    std::optional<long long> user_id;
+    std::string status;
+    std::string verdict;
+    int limit{50};
+    int offset{};
+};
+
 } // namespace judge

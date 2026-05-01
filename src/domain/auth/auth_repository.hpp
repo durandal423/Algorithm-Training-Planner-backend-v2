@@ -14,6 +14,7 @@ public:
 
     std::optional<User> findUserById(long long id) const;
     std::optional<User> findUserByIdentifier(const std::string& identifier) const;
+    bool adminExists() const;
     long long createUser(
         const std::string& username,
         const std::optional<std::string>& email,

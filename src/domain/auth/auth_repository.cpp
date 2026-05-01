@@ -35,8 +35,8 @@ User user_from_row(const pqxx::row& row) {
 }
 
 constexpr auto kUserSelect = R"SQL(
-    SELECT id, username, email, display_name, password_hash, role, status,
-           last_login_at, created_at, updated_at
+    SELECT users.id, users.username, users.email, users.display_name, users.password_hash,
+           users.role, users.status, users.last_login_at, users.created_at, users.updated_at
     FROM users
 )SQL";
 
@@ -74,6 +74,22 @@ std::optional<User> AuthRepository::findUserByIdentifier(const std::string& iden
         return std::nullopt;
     }
     return user_from_row(*row);
+}
+
+bool AuthRepository::adminExists() const {
+    auto lease = pool_.acquire();
+    pqxx::work tx{lease.connection()};
+    const bool exists = tx.exec(
+        R"SQL(
+            SELECT EXISTS (
+                SELECT 1
+                FROM users
+                WHERE role = 'admin'
+            )
+        )SQL"
+    ).one_field().as<bool>();
+    tx.commit();
+    return exists;
 }
 
 long long AuthRepository::createUser(

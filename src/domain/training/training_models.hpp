@@ -67,4 +67,15 @@ struct TrainingRecord {
     std::string practiced_at;
 };
 
+struct TrainingProblemCandidate {
+    long long id{};
+    std::string code;
+    std::string title;
+    int difficulty{};
+    int estimated_minutes{};
+    int matched_tag_count{};
+    int wrong_attempt_count{};
+    std::vector<std::string> tag_names;
+};
+
 } // namespace training

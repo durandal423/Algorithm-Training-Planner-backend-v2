@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <sstream>
 
 namespace training {
 namespace {
@@ -100,6 +101,41 @@ TrainingPlanItem item_from_row(const pqxx::row& row) {
     return item;
 }
 
+TrainingProblemCandidate candidate_from_row(const pqxx::row& row) {
+    TrainingProblemCandidate candidate;
+    candidate.id = row["id"].as<long long>();
+    candidate.code = row["code"].as<std::string>();
+    candidate.title = row["title"].as<std::string>();
+    candidate.difficulty = row["difficulty"].as<int>();
+    candidate.estimated_minutes = row["estimated_minutes"].as<int>();
+    candidate.matched_tag_count = row["matched_tag_count"].as<int>();
+    candidate.wrong_attempt_count = row["wrong_attempt_count"].as<int>();
+
+    std::istringstream input{string_or_empty(row["tag_names"])};
+    std::string tag;
+    while (std::getline(input, tag, ',')) {
+        tag = trim_copy(tag);
+        if (!tag.empty()) {
+            candidate.tag_names.push_back(std::move(tag));
+        }
+    }
+    return candidate;
+}
+
+constexpr auto kGoalSelect = R"SQL(
+    SELECT id, user_id, name, target_count, time_budget_minutes,
+           difficulty_min, difficulty_max, prefer_wrong_problems, prefer_weak_tags,
+           difficulty_weight, tag_coverage_weight, wrong_problem_weight,
+           weak_tag_weight, estimated_time_weight, created_at
+    FROM training_goals
+)SQL";
+
+constexpr auto kPlanSelect = R"SQL(
+    SELECT id, user_id, goal_id, name, status, candidate_count,
+           selected_count, total_estimated_minutes, algorithm_summary, created_at
+    FROM training_plans
+)SQL";
+
 } // namespace
 
 TrainingRepository::TrainingRepository(ConnectionPool& pool)
@@ -140,27 +176,98 @@ long long TrainingRepository::createGoal(const TrainingGoal& goal) const {
     return id;
 }
 
+std::optional<TrainingGoal> TrainingRepository::getGoal(long long id, long long user_id) const {
+    auto lease = pool_.acquire();
+    pqxx::work tx{lease.connection()};
+    const auto row = tx.exec(
+        std::string{kGoalSelect} + R"SQL(
+            WHERE id = $1 AND user_id = $2
+        )SQL",
+        pqxx::params{id, user_id}
+    ).opt_row();
+    if (!row) {
+        tx.commit();
+        return std::nullopt;
+    }
+    auto goal = goal_from_row(*row);
+    goal.tag_names = loadGoalTags(tx, goal.id);
+    tx.commit();
+    return goal;
+}
+
 std::vector<TrainingGoal> TrainingRepository::listGoals(long long user_id) const {
     auto lease = pool_.acquire();
     pqxx::work tx{lease.connection()};
     std::vector<TrainingGoal> goals;
     const auto rows = tx.exec(
-        R"SQL(
-            SELECT id, user_id, name, target_count, time_budget_minutes,
-                   difficulty_min, difficulty_max, prefer_wrong_problems, prefer_weak_tags,
-                   difficulty_weight, tag_coverage_weight, wrong_problem_weight,
-                   weak_tag_weight, estimated_time_weight, created_at
-            FROM training_goals
+        std::string{kGoalSelect} + R"SQL(
             WHERE user_id = $1
             ORDER BY created_at DESC, id DESC
         )SQL",
         pqxx::params{user_id}
     );
     for (const auto& row : rows) {
-        goals.push_back(goal_from_row(row));
+        auto goal = goal_from_row(row);
+        goal.tag_names = loadGoalTags(tx, goal.id);
+        goals.push_back(std::move(goal));
     }
     tx.commit();
     return goals;
+}
+
+bool TrainingRepository::updateGoal(long long id, const TrainingGoal& goal) const {
+    auto lease = pool_.acquire();
+    pqxx::work tx{lease.connection()};
+    const auto result = tx.exec(
+        R"SQL(
+            UPDATE training_goals
+            SET name = $3,
+                target_count = $4,
+                time_budget_minutes = $5,
+                difficulty_min = $6,
+                difficulty_max = $7,
+                prefer_wrong_problems = $8,
+                prefer_weak_tags = $9,
+                difficulty_weight = $10,
+                tag_coverage_weight = $11,
+                wrong_problem_weight = $12,
+                weak_tag_weight = $13,
+                estimated_time_weight = $14
+            WHERE id = $1 AND user_id = $2
+        )SQL",
+        pqxx::params{
+            id,
+            goal.user_id,
+            goal.name,
+            goal.target_count,
+            goal.time_budget_minutes,
+            goal.difficulty_min,
+            goal.difficulty_max,
+            goal.prefer_wrong_problems,
+            goal.prefer_weak_tags,
+            goal.difficulty_weight,
+            goal.tag_coverage_weight,
+            goal.wrong_problem_weight,
+            goal.weak_tag_weight,
+            goal.estimated_time_weight
+        }
+    );
+    if (result.affected_rows() > 0) {
+        replaceGoalTags(tx, id, goal.tag_names);
+    }
+    tx.commit();
+    return result.affected_rows() > 0;
+}
+
+bool TrainingRepository::deleteGoal(long long id, long long user_id) const {
+    auto lease = pool_.acquire();
+    pqxx::work tx{lease.connection()};
+    const auto result = tx.exec(
+        "DELETE FROM training_goals WHERE id = $1 AND user_id = $2",
+        pqxx::params{id, user_id}
+    );
+    tx.commit();
+    return result.affected_rows() > 0;
 }
 
 long long TrainingRepository::createPlan(
@@ -215,15 +322,28 @@ long long TrainingRepository::createPlan(
     return plan_id;
 }
 
+std::optional<TrainingPlan> TrainingRepository::getPlan(long long id, long long user_id) const {
+    auto lease = pool_.acquire();
+    pqxx::work tx{lease.connection()};
+    const auto row = tx.exec(
+        std::string{kPlanSelect} + R"SQL(
+            WHERE id = $1 AND user_id = $2
+        )SQL",
+        pqxx::params{id, user_id}
+    ).opt_row();
+    tx.commit();
+    if (!row) {
+        return std::nullopt;
+    }
+    return plan_from_row(*row);
+}
+
 std::vector<TrainingPlan> TrainingRepository::listPlans(long long user_id) const {
     auto lease = pool_.acquire();
     pqxx::work tx{lease.connection()};
     std::vector<TrainingPlan> plans;
     const auto rows = tx.exec(
-        R"SQL(
-            SELECT id, user_id, goal_id, name, status, candidate_count,
-                   selected_count, total_estimated_minutes, algorithm_summary, created_at
-            FROM training_plans
+        std::string{kPlanSelect} + R"SQL(
             WHERE user_id = $1
             ORDER BY created_at DESC, id DESC
         )SQL",
@@ -257,6 +377,70 @@ std::vector<TrainingPlanItem> TrainingRepository::listPlanItems(long long plan_i
     return items;
 }
 
+std::vector<TrainingProblemCandidate> TrainingRepository::listProblemCandidates(
+    const TrainingGoal& goal,
+    bool include_hidden
+) const {
+    auto lease = pool_.acquire();
+    pqxx::work tx{lease.connection()};
+    std::vector<TrainingProblemCandidate> candidates;
+    std::string goal_tags_text;
+    for (const auto& tag : goal.tag_names) {
+        if (!goal_tags_text.empty()) {
+            goal_tags_text.push_back('\n');
+        }
+        goal_tags_text += tag;
+    }
+    const auto rows = tx.exec(
+        R"SQL(
+            WITH goal_tags AS (
+                SELECT trim(name) AS name
+                FROM unnest(string_to_array($6, E'\n')) AS name
+                WHERE trim(name) <> ''
+            ),
+            tagged AS (
+                SELECT p.id,
+                       p.code,
+                       p.title,
+                       p.difficulty,
+                       p.estimated_minutes,
+                       COALESCE(string_agg(DISTINCT t.name, ',' ORDER BY t.name), '') AS tag_names,
+                       COUNT(DISTINCT gt.name)::integer AS matched_tag_count,
+                       COUNT(DISTINCT s.id) FILTER (
+                           WHERE s.user_id = $1 AND s.verdict IS NOT NULL AND s.verdict <> 'AC'
+                       )::integer AS wrong_attempt_count
+                FROM problems p
+                LEFT JOIN problem_tags pt ON pt.problem_id = p.id
+                LEFT JOIN tags t ON t.id = pt.tag_id
+                LEFT JOIN goal_tags gt ON lower(gt.name) = lower(t.name)
+                LEFT JOIN submissions s ON s.problem_id = p.id
+                WHERE ($2 OR p.visibility = 'public')
+                  AND ($3::integer IS NULL OR p.difficulty >= $3)
+                  AND ($4::integer IS NULL OR p.difficulty <= $4)
+                GROUP BY p.id, p.code, p.title, p.difficulty, p.estimated_minutes
+            )
+            SELECT id, code, title, difficulty, estimated_minutes,
+                   tag_names, matched_tag_count, wrong_attempt_count
+            FROM tagged
+            WHERE ($5 = 0 OR matched_tag_count > 0)
+            ORDER BY difficulty ASC, estimated_minutes ASC, id ASC
+        )SQL",
+        pqxx::params{
+            goal.user_id,
+            include_hidden,
+            goal.difficulty_min,
+            goal.difficulty_max,
+            static_cast<int>(goal.tag_names.size()),
+            goal_tags_text
+        }
+    );
+    for (const auto& row : rows) {
+        candidates.push_back(candidate_from_row(row));
+    }
+    tx.commit();
+    return candidates;
+}
+
 bool TrainingRepository::updatePlanItemFromSubmission(
     long long submission_id,
     const std::string& verdict
@@ -267,8 +451,8 @@ bool TrainingRepository::updatePlanItemFromSubmission(
         R"SQL(
             UPDATE training_plan_items tpi
             SET last_submission_id = s.id,
-                last_verdict = $2,
-                status = CASE WHEN $2 = 'AC' THEN 'completed' ELSE 'failed' END
+                last_verdict = $2::varchar,
+                status = CASE WHEN $2::text = 'AC' THEN 'completed' ELSE 'failed' END
             FROM submissions s
             WHERE s.id = $1
               AND tpi.problem_id = s.problem_id
@@ -356,6 +540,27 @@ void TrainingRepository::replaceGoalTags(
             pqxx::params{goal_id, tag_id}
         ).no_rows();
     }
+}
+
+std::vector<std::string> TrainingRepository::loadGoalTags(
+    pqxx::transaction_base& tx,
+    long long goal_id
+) const {
+    std::vector<std::string> tags;
+    const auto rows = tx.exec(
+        R"SQL(
+            SELECT t.name
+            FROM tags t
+            JOIN training_goal_tags tgt ON tgt.tag_id = t.id
+            WHERE tgt.goal_id = $1
+            ORDER BY t.name
+        )SQL",
+        pqxx::params{goal_id}
+    );
+    for (const auto& row : rows) {
+        tags.push_back(row["name"].as<std::string>());
+    }
+    return tags;
 }
 
 } // namespace training

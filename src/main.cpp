@@ -1,5 +1,6 @@
 #include "api/route_registry.hpp"
 #include "db/database.hpp"
+#include "domain/auth/bootstrap_admin.hpp"
 #include "domain/judge/judge_dispatcher.hpp"
 
 #include "config.hpp"
@@ -14,6 +15,7 @@ int main() {
         ConnectionPool connection_pool{Database::appConninfo()};
         Database::ensureDatabase();
         Database::ensureSchema();
+        auth::bootstrapAdminFromEnv(connection_pool);
         judge::JudgeDispatcher judge_dispatcher{connection_pool};
         judge_dispatcher.start();
 

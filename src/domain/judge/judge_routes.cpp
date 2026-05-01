@@ -5,6 +5,7 @@
 #include <nlohmann/json.hpp>
 
 #include <exception>
+#include <optional>
 #include <string>
 
 namespace {
@@ -28,6 +29,30 @@ std::optional<int> optional_int(const nlohmann::json& body, const char* key) {
         return std::nullopt;
     }
     return body.at(key).get<int>();
+}
+
+std::optional<long long> optional_long_param(const crow::request& req, const char* key) {
+    if (const char* value = req.url_params.get(key)) {
+        return std::stoll(value);
+    }
+    return std::nullopt;
+}
+
+void apply_submission_query(judge::SubmissionFilter& filter, const crow::request& req) {
+    filter.problem_id = optional_long_param(req, "problemId");
+    filter.user_id = optional_long_param(req, "userId");
+    if (const char* status = req.url_params.get("status")) {
+        filter.status = status;
+    }
+    if (const char* verdict = req.url_params.get("verdict")) {
+        filter.verdict = verdict;
+    }
+    if (const char* limit = req.url_params.get("limit")) {
+        filter.limit = std::stoi(limit);
+    }
+    if (const char* offset = req.url_params.get("offset")) {
+        filter.offset = std::stoi(offset);
+    }
 }
 
 nlohmann::json config_json(const judge::JudgeConfig& config) {
@@ -107,12 +132,12 @@ nlohmann::json result_json(const judge::SubmissionResult& result) {
     };
 }
 
-nlohmann::json submission_json(const judge::Submission& submission) {
+nlohmann::json submission_json(const judge::Submission& submission, bool include_source) {
     nlohmann::json results = nlohmann::json::array();
     for (const auto& result : submission.results) {
         results.push_back(result_json(result));
     }
-    return {
+    auto body = nlohmann::json{
         {"id", submission.id},
         {"problemId", submission.problem_id},
         {"userId", submission.user_id},
@@ -130,9 +155,35 @@ nlohmann::json submission_json(const judge::Submission& submission) {
         {"finishedAt", submission.finished_at},
         {"results", results}
     };
+    if (include_source) {
+        body["sourceCode"] = submission.source_code;
+    }
+    return body;
 }
 
 RouteRegistration judgeRoutesRegistration([](App& app, ConnectionPool& connection_pool) {
+    CROW_ROUTE(app, "/api/submissions")
+    .methods(crow::HTTPMethod::Get)
+    ([&connection_pool](const crow::request& req) -> crow::response {
+        try {
+            const auto user = auth::requireUser(connection_pool, req);
+            judge::SubmissionFilter filter;
+            apply_submission_query(filter, req);
+            filter.user_id = user.id;
+
+            judge::JudgeRepository repository{connection_pool};
+            nlohmann::json items = nlohmann::json::array();
+            for (const auto& submission : repository.listSubmissions(filter)) {
+                items.push_back(submission_json(submission, false));
+            }
+            return json_response(200, {{"items", items}});
+        } catch (const auth::Unauthorized& error) {
+            return json_response(401, {{"error", error.what()}});
+        } catch (const std::exception& error) {
+            return json_response(400, {{"error", error.what()}});
+        }
+    });
+
     CROW_ROUTE(app, "/api/problems/<int>/submissions")
     .methods(crow::HTTPMethod::Post)
     ([&connection_pool](const crow::request& req, int problem_id) -> crow::response {
@@ -173,9 +224,50 @@ RouteRegistration judgeRoutesRegistration([](App& app, ConnectionPool& connectio
             if (user.role != "admin" && submission->user_id != user.id) {
                 return json_response(403, {{"error", "submission belongs to another user"}});
             }
-            return json_response(200, {{"submission", submission_json(*submission)}});
+            return json_response(200, {{"submission", submission_json(*submission, true)}});
         } catch (const auth::Unauthorized& error) {
             return json_response(401, {{"error", error.what()}});
+        }
+    });
+
+    CROW_ROUTE(app, "/api/admin/submissions")
+    .methods(crow::HTTPMethod::Get)
+    ([&connection_pool](const crow::request& req) -> crow::response {
+        try {
+            auth::requireAdmin(connection_pool, req);
+            judge::SubmissionFilter filter;
+            apply_submission_query(filter, req);
+
+            judge::JudgeRepository repository{connection_pool};
+            nlohmann::json items = nlohmann::json::array();
+            for (const auto& submission : repository.listSubmissions(filter)) {
+                items.push_back(submission_json(submission, false));
+            }
+            return json_response(200, {{"items", items}});
+        } catch (const auth::Unauthorized& error) {
+            return json_response(401, {{"error", error.what()}});
+        } catch (const auth::Forbidden& error) {
+            return json_response(403, {{"error", error.what()}});
+        } catch (const std::exception& error) {
+            return json_response(400, {{"error", error.what()}});
+        }
+    });
+
+    CROW_ROUTE(app, "/api/admin/submissions/<int>/rejudge")
+    .methods(crow::HTTPMethod::Post)
+    ([&connection_pool](const crow::request& req, int id) -> crow::response {
+        try {
+            auth::requireAdmin(connection_pool, req);
+            judge::JudgeRepository repository{connection_pool};
+            return repository.resetSubmissionForRejudge(id)
+                ? json_response(200, {{"queued", true}})
+                : json_response(404, {{"error", "submission not found"}});
+        } catch (const auth::Unauthorized& error) {
+            return json_response(401, {{"error", error.what()}});
+        } catch (const auth::Forbidden& error) {
+            return json_response(403, {{"error", error.what()}});
+        } catch (const std::exception& error) {
+            return json_response(400, {{"error", error.what()}});
         }
     });
 
@@ -222,6 +314,33 @@ RouteRegistration judgeRoutesRegistration([](App& app, ConnectionPool& connectio
             const auto body = nlohmann::json::parse(req.body);
             const auto id = repository.createTestCase(test_case_from_json(problem_id, body));
             return json_response(201, {{"id", id}});
+        } catch (const auth::Unauthorized& error) {
+            return json_response(401, {{"error", error.what()}});
+        } catch (const auth::Forbidden& error) {
+            return json_response(403, {{"error", error.what()}});
+        } catch (const std::exception& error) {
+            return json_response(400, {{"error", error.what()}});
+        }
+    });
+
+    CROW_ROUTE(app, "/api/admin/judge-test-cases/<int>")
+    .methods(crow::HTTPMethod::Put, crow::HTTPMethod::Delete)
+    ([&connection_pool](const crow::request& req, int id) -> crow::response {
+        try {
+            auth::requireAdmin(connection_pool, req);
+            judge::JudgeRepository repository{connection_pool};
+            if (req.method == crow::HTTPMethod::Delete) {
+                return repository.deleteTestCase(id)
+                    ? json_response(200, {{"deleted", true}})
+                    : json_response(404, {{"error", "judge test case not found"}});
+            }
+
+            const auto body = nlohmann::json::parse(req.body);
+            const auto updated = repository.updateTestCase(id, test_case_from_json(0, body));
+            if (!updated) {
+                return json_response(404, {{"error", "judge test case not found"}});
+            }
+            return json_response(200, {{"testCase", test_case_json(*updated)}});
         } catch (const auth::Unauthorized& error) {
             return json_response(401, {{"error", error.what()}});
         } catch (const auth::Forbidden& error) {

@@ -2,6 +2,8 @@
 
 #include <pqxx/pqxx>
 
+#include <algorithm>
+
 namespace judge {
 namespace {
 
@@ -229,6 +231,76 @@ long long JudgeRepository::createTestCase(const JudgeTestCase& test_case) const 
     return id;
 }
 
+std::optional<JudgeTestCase> JudgeRepository::getTestCase(long long id) const {
+    auto lease = pool_.acquire();
+    pqxx::work tx{lease.connection()};
+    const auto row = tx.exec(
+        R"SQL(
+            SELECT id, problem_id, name, input_data, expected_output, visibility,
+                   points, order_index, time_limit_ms, memory_limit_mb
+            FROM judge_test_cases
+            WHERE id = $1
+        )SQL",
+        pqxx::params{id}
+    ).opt_row();
+    tx.commit();
+    if (!row) {
+        return std::nullopt;
+    }
+    return test_case_from_row(*row);
+}
+
+std::optional<JudgeTestCase> JudgeRepository::updateTestCase(
+    long long id,
+    const JudgeTestCase& test_case
+) const {
+    auto lease = pool_.acquire();
+    pqxx::work tx{lease.connection()};
+    const auto row = tx.exec(
+        R"SQL(
+            UPDATE judge_test_cases
+            SET name = $2,
+                input_data = $3,
+                expected_output = $4,
+                visibility = $5,
+                points = $6,
+                order_index = $7,
+                time_limit_ms = $8,
+                memory_limit_mb = $9
+            WHERE id = $1
+            RETURNING id, problem_id, name, input_data, expected_output, visibility,
+                      points, order_index, time_limit_ms, memory_limit_mb
+        )SQL",
+        pqxx::params{
+            id,
+            test_case.name,
+            test_case.input_data,
+            test_case.expected_output,
+            test_case.visibility,
+            test_case.points,
+            test_case.order_index,
+            test_case.time_limit_ms,
+            test_case.memory_limit_mb
+        }
+    ).opt_row();
+    tx.commit();
+    if (!row) {
+        return std::nullopt;
+    }
+    return test_case_from_row(*row);
+}
+
+bool JudgeRepository::deleteTestCase(long long id) const {
+    auto lease = pool_.acquire();
+    pqxx::work tx{lease.connection()};
+    const auto result = tx.exec(
+        "DELETE FROM judge_test_cases WHERE id = $1",
+        pqxx::params{id}
+    );
+    tx.commit();
+    return result.affected_rows() > 0;
+}
+
 long long JudgeRepository::createSubmission(const Submission& submission) const {
     auto lease = pool_.acquire();
     pqxx::work tx{lease.connection()};
@@ -264,6 +336,37 @@ std::optional<Submission> JudgeRepository::getSubmission(long long id) const {
     submission.results = loadResults(tx, submission.id);
     tx.commit();
     return submission;
+}
+
+std::vector<Submission> JudgeRepository::listSubmissions(const SubmissionFilter& filter) const {
+    auto lease = pool_.acquire();
+    pqxx::work tx{lease.connection()};
+    std::vector<Submission> submissions;
+    const int limit = std::clamp(filter.limit, 1, 200);
+    const int offset = std::max(0, filter.offset);
+    const auto rows = tx.exec(
+        std::string{kSubmissionSelect} + R"SQL(
+            WHERE ($1::bigint IS NULL OR problem_id = $1)
+              AND ($2::bigint IS NULL OR user_id = $2)
+              AND ($3 = '' OR status = $3)
+              AND ($4 = '' OR verdict = $4)
+            ORDER BY submitted_at DESC, id DESC
+            LIMIT $5 OFFSET $6
+        )SQL",
+        pqxx::params{
+            filter.problem_id,
+            filter.user_id,
+            filter.status,
+            filter.verdict,
+            limit,
+            offset
+        }
+    );
+    for (const auto& row : rows) {
+        submissions.push_back(submission_from_row(row));
+    }
+    tx.commit();
+    return submissions;
 }
 
 std::optional<Submission> JudgeRepository::fetchNextQueuedSubmission(const std::string& worker_id) const {
@@ -313,6 +416,36 @@ std::optional<Submission> JudgeRepository::fetchNextQueuedSubmission(const std::
     ).no_rows();
     tx.commit();
     return submission;
+}
+
+bool JudgeRepository::resetSubmissionForRejudge(long long id) const {
+    auto lease = pool_.acquire();
+    pqxx::work tx{lease.connection()};
+    tx.exec(
+        "DELETE FROM submission_results WHERE submission_id = $1",
+        pqxx::params{id}
+    ).no_rows();
+    const auto result = tx.exec(
+        R"SQL(
+            UPDATE submissions
+            SET status = 'queued',
+                verdict = NULL,
+                score = 0,
+                compile_stdout = NULL,
+                compile_stderr = NULL,
+                compile_time_ms = NULL,
+                max_time_ms = NULL,
+                max_memory_kb = NULL,
+                locked_by = NULL,
+                locked_at = NULL,
+                started_at = NULL,
+                finished_at = NULL
+            WHERE id = $1
+        )SQL",
+        pqxx::params{id}
+    );
+    tx.commit();
+    return result.affected_rows() > 0;
 }
 
 void JudgeRepository::insertSubmissionResult(const SubmissionResult& result) const {
@@ -382,23 +515,7 @@ void JudgeRepository::completeSubmission(
             max_memory_kb
         }
     ).no_rows();
-    tx.exec(
-        R"SQL(
-            UPDATE training_plan_items tpi
-            SET last_submission_id = $1,
-                last_verdict = $2,
-                status = CASE WHEN $2 = 'AC' THEN 'completed' ELSE 'failed' END
-            FROM submissions s
-            WHERE s.id = $1
-              AND tpi.problem_id = s.problem_id
-              AND tpi.plan_id IN (
-                    SELECT id
-                    FROM training_plans
-                    WHERE user_id = s.user_id
-              )
-        )SQL",
-        pqxx::params{id, verdict}
-    ).no_rows();
+    updateLatestPlanItemFromSubmission(tx, id, verdict);
     tx.commit();
 }
 
@@ -431,6 +548,7 @@ void JudgeRepository::failSubmission(
             compile_stderr.empty() ? message : compile_stderr
         }
     ).no_rows();
+    updateLatestPlanItemFromSubmission(tx, id, verdict);
     tx.commit();
 }
 
@@ -453,6 +571,37 @@ std::vector<SubmissionResult> JudgeRepository::loadResults(
         results.push_back(result_from_row(row));
     }
     return results;
+}
+
+void JudgeRepository::updateLatestPlanItemFromSubmission(
+    pqxx::transaction_base& tx,
+    long long submission_id,
+    const std::string& verdict
+) const {
+    tx.exec(
+        R"SQL(
+            WITH target AS (
+                SELECT tpi.id
+                FROM submissions s
+                JOIN training_plans tp
+                  ON tp.user_id = s.user_id
+                 AND tp.status IN ('active', 'draft')
+                JOIN training_plan_items tpi
+                  ON tpi.plan_id = tp.id
+                 AND tpi.problem_id = s.problem_id
+                WHERE s.id = $1
+                ORDER BY tp.created_at DESC, tpi.order_index DESC, tpi.id DESC
+                LIMIT 1
+            )
+            UPDATE training_plan_items tpi
+            SET last_submission_id = $1,
+                last_verdict = $2::varchar,
+                status = CASE WHEN $2::text = 'AC' THEN 'completed' ELSE 'failed' END
+            FROM target
+            WHERE tpi.id = target.id
+        )SQL",
+        pqxx::params{submission_id, verdict}
+    ).no_rows();
 }
 
 } // namespace judge
