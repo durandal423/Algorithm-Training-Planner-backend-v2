@@ -6,7 +6,7 @@
 
 - 数据库迁移：
   - `sql/003_oj_schema.sql` 创建 OJ 核心表。
-  - `src/db/schema.cpp` 维护 version `1, 2, 3`，并跳过空白 SQL 文件。
+  - `src/db/schema.cpp` 维护 version `1, 2, 3, 4`，并跳过空白 SQL 文件。
   - 全新库启动时会自动检查数据库、执行迁移、验证必需表存在。
 - 认证与用户：
   - 注册、登录、当前用户、登出 API 已实现。
@@ -39,9 +39,13 @@
 - 训练计划 API：
   - 用户可维护训练目标 CRUD。
   - 用户可根据训练目标生成训练计划。
-  - 生成策略按标签、难度范围、可见性过滤，再按标签命中、难度、错题倾向、预计耗时做简单贪心选择。
+  - 生成策略按标签、难度范围、可见性过滤。
+  - 底层先用 `selectStableDifficultyWindow` 以双指针/滑动窗口选出稳定难度候选区间，再用 `optimizeTrainingPlanByDP` 在时间预算和目标题数约束下做动态规划选题。
   - 用户可查看训练计划列表、详情、计划项列表。
   - 判题完成后，会回写该用户最近相关 `draft` / `active` 训练计划项的 `last_submission_id`、`last_verdict`、`status`。
+- 算法展示层：
+  - 新增 `src/algorithms/training_plan_algorithms.hpp/.cpp`。
+  - 核心函数名为 `selectStableDifficultyWindow` 与 `optimizeTrainingPlanByDP`。
 - 测试与验证：
   - 新增 Catch2 测试目标 `try-crow-tests`。
   - 测试按方向拆分到 `tests/unit`、`tests/db`、`tests/fixtures`、`tests/manual`。
@@ -111,7 +115,8 @@
 
 ## 当前数据注意事项
 
-- 本地数据库 `algorithm_training_planner_v2` 已记录 `schema_migrations` version `1, 2, 3`。
+- 本地数据库 `algorithm_training_planner_v2` 已记录 `schema_migrations` version `1, 2, 3, 4`。
+- Version `4` 迁移 `sql/004_seed_problem_catalog.sql` 用于给已有库补齐题库和标签种子。
 - 压测脚本会在题库中保留或更新 P12134 / P12135 的 `codex-load-*` 测试点。
 - 最近一次真实压测提交保留在数据库中，便于复查判题记录。
 - `.gitignore` 有用户已有修改，不应随意回退。
@@ -121,7 +126,7 @@
 - 错误响应目前统一形态为 `{ "error": string }`，但 helper 仍分散在各 routes 文件中。
 - 列表接口目前没有返回 total count，只返回 `items`。
 - `GET /api/problems` 当前只接入了 `q`、`tag`、`limit`、`offset` 查询参数，难度范围字段在 repository 中存在但路由暂未暴露。
-- 训练计划生成策略是第一版直观贪心策略，不是复杂推荐算法。
+- 训练计划生成已切换为“双指针稳定窗口 + 动态规划选题”的展示版算法，但仍不是完整个性化推荐系统。
 - 训练记录 `training_records` 仍只有 repository 创建方法，暂未提供完整前端 CRUD API。
 - 只支持 C++ 判题。
 - 不使用 JWT；继续使用服务端 session token hash。

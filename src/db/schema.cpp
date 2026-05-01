@@ -55,6 +55,11 @@ constexpr std::array kMigrations{
         3,
         "003_oj_schema.sql",
         "create oj platform schema"
+    },
+    MigrationScript{
+        4,
+        "004_seed_problem_catalog.sql",
+        "seed problem catalog and tags"
     }
 };
 

@@ -1,13 +1,12 @@
 #include "api/route_registry.hpp"
+#include "algorithms/training_plan_algorithms.hpp"
 #include "domain/auth/auth_http.hpp"
 #include "domain/training/training_repository.hpp"
 
 #include <nlohmann/json.hpp>
 
-#include <algorithm>
 #include <exception>
 #include <optional>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -45,17 +44,6 @@ std::vector<std::string> string_array(const nlohmann::json& body, const char* ke
         }
     }
     return values;
-}
-
-std::string join_strings(const std::vector<std::string>& values, const std::string& delimiter) {
-    std::ostringstream output;
-    for (std::size_t i = 0; i < values.size(); ++i) {
-        if (i > 0) {
-            output << delimiter;
-        }
-        output << values[i];
-    }
-    return output.str();
 }
 
 nlohmann::json goal_json(const training::TrainingGoal& goal) {
@@ -132,61 +120,18 @@ nlohmann::json item_json(const training::TrainingPlanItem& item) {
     };
 }
 
-int candidate_score(
-    const training::TrainingProblemCandidate& candidate,
-    const training::TrainingGoal& goal
-) {
-    int score = 0;
-    score += candidate.matched_tag_count * goal.tag_coverage_weight;
-    score += std::max(0, 3000 - candidate.difficulty) / 100 * goal.difficulty_weight;
-    if (goal.prefer_wrong_problems && candidate.wrong_attempt_count > 0) {
-        score += goal.wrong_problem_weight + candidate.wrong_attempt_count;
-    }
-    score -= candidate.estimated_minutes * std::max(1, goal.estimated_time_weight);
-    return score;
-}
-
 std::vector<training::TrainingPlanItem> select_items(
-    std::vector<training::TrainingProblemCandidate> candidates,
-    const training::TrainingGoal& goal,
-    int& total_minutes
+    const training::OptimizedTrainingPlan& optimized
 ) {
-    std::sort(candidates.begin(), candidates.end(), [&](const auto& lhs, const auto& rhs) {
-        const int lhs_score = candidate_score(lhs, goal);
-        const int rhs_score = candidate_score(rhs, goal);
-        if (lhs_score != rhs_score) {
-            return lhs_score > rhs_score;
-        }
-        if (lhs.difficulty != rhs.difficulty) {
-            return lhs.difficulty < rhs.difficulty;
-        }
-        if (lhs.estimated_minutes != rhs.estimated_minutes) {
-            return lhs.estimated_minutes < rhs.estimated_minutes;
-        }
-        return lhs.id < rhs.id;
-    });
-
     std::vector<training::TrainingPlanItem> items;
-    total_minutes = 0;
-    for (const auto& candidate : candidates) {
-        if (static_cast<int>(items.size()) >= goal.target_count) {
-            break;
-        }
-        if (total_minutes + candidate.estimated_minutes > goal.time_budget_minutes) {
-            continue;
-        }
-
+    for (const auto& selected : optimized.items) {
         training::TrainingPlanItem item;
-        item.problem_id = candidate.id;
+        item.problem_id = selected.problem.id;
         item.order_index = static_cast<int>(items.size()) + 1;
-        item.estimated_minutes = candidate.estimated_minutes;
-        item.score = candidate_score(candidate, goal);
-        item.selected_reason =
-            "tags=" + join_strings(candidate.tag_names, ",") +
-            "; matchedTags=" + std::to_string(candidate.matched_tag_count) +
-            "; wrongAttempts=" + std::to_string(candidate.wrong_attempt_count);
+        item.estimated_minutes = selected.problem.estimated_minutes;
+        item.score = selected.score;
+        item.selected_reason = selected.selected_reason;
         item.status = "not_started";
-        total_minutes += candidate.estimated_minutes;
         items.push_back(std::move(item));
     }
     return items;
@@ -276,8 +221,9 @@ RouteRegistration trainingRoutesRegistration([](App& app, ConnectionPool& connec
             }
 
             const auto candidates = repository.listProblemCandidates(*goal, user.role == "admin");
-            int total_minutes = 0;
-            auto items = select_items(candidates, *goal, total_minutes);
+            const auto window = training::selectStableDifficultyWindow(candidates, *goal);
+            const auto optimized = training::optimizeTrainingPlanByDP(window, *goal);
+            auto items = select_items(optimized);
 
             training::TrainingPlan plan;
             plan.user_id = user.id;
@@ -286,8 +232,15 @@ RouteRegistration trainingRoutesRegistration([](App& app, ConnectionPool& connec
             plan.status = body.value("status", std::string{"draft"});
             plan.candidate_count = static_cast<int>(candidates.size());
             plan.selected_count = static_cast<int>(items.size());
-            plan.total_estimated_minutes = total_minutes;
-            plan.algorithm_summary = "greedy selection by tags, difficulty, wrong attempts, and estimated time";
+            plan.total_estimated_minutes = optimized.total_estimated_minutes;
+            plan.algorithm_summary =
+                "selectStableDifficultyWindow: two-pointer stable difficulty window [" +
+                std::to_string(window.left_difficulty) + ", " +
+                std::to_string(window.right_difficulty) + "], span=" +
+                std::to_string(window.difficulty_span) + ", windowCandidates=" +
+                std::to_string(window.candidates.size()) +
+                "; optimizeTrainingPlanByDP: 0/1 knapsack by time budget and target count, totalScore=" +
+                std::to_string(optimized.total_score);
 
             const auto plan_id = repository.createPlan(plan, items);
             const auto saved_plan = repository.getPlan(plan_id, user.id);

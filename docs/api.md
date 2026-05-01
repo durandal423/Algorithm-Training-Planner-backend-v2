@@ -264,7 +264,7 @@ Authorization: Bearer <token>
   "candidateCount": 20,
   "selectedCount": 8,
   "totalEstimatedMinutes": 175,
-  "algorithmSummary": "greedy selection by tags, difficulty, wrong attempts, and estimated time",
+  "algorithmSummary": "selectStableDifficultyWindow: two-pointer stable difficulty window [1200, 1700], span=500, windowCandidates=12; optimizeTrainingPlanByDP: 0/1 knapsack by time budget and target count, totalScore=574",
   "createdAt": "2026-05-01 13:00:00+00"
 }
 ```
@@ -279,7 +279,7 @@ Authorization: Bearer <token>
   "orderIndex": 1,
   "estimatedMinutes": 25,
   "score": 234,
-  "selectedReason": "tags=滑动窗口; matchedTags=1; wrongAttempts=0",
+  "selectedReason": "双指针稳定窗口候选；DP最优转移选中；覆盖目标标签=双指针,滑动窗口；score=145",
   "status": "not_started",
   "lastSubmissionId": null,
   "lastVerdict": null,
@@ -861,6 +861,8 @@ GET /api/problems?q=P12134&tag=滑动窗口&limit=20&offset=0
 - `status` 可选，默认 `draft`。
 
 响应 `201`：
+
+算法说明：该接口保持 API 不变。后端先调用 `selectStableDifficultyWindow` 用双指针/滑动窗口从候选题中选出稳定难度区间，再调用 `optimizeTrainingPlanByDP` 在 `targetCount` 和 `timeBudgetMinutes` 约束下做 0/1 背包式动态规划选题。
 
 ```json
 {

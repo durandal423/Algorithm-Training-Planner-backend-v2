@@ -78,4 +78,32 @@ struct TrainingProblemCandidate {
     std::vector<std::string> tag_names;
 };
 
+struct StableDifficultyWindow {
+    int left_index{-1};
+    int right_index{-1};
+    int left_difficulty{};
+    int right_difficulty{};
+    int difficulty_span{};
+    int wrong_problem_count{};
+    double coverage_ratio{};
+    std::vector<std::string> covered_tags;
+    std::vector<std::string> uncovered_tags;
+    std::vector<TrainingProblemCandidate> candidates;
+};
+
+struct SelectedTrainingProblem {
+    TrainingProblemCandidate problem;
+    int score{};
+    std::vector<std::string> covered_target_tags;
+    std::string selected_reason;
+};
+
+struct OptimizedTrainingPlan {
+    std::vector<SelectedTrainingProblem> items;
+    int total_estimated_minutes{};
+    int total_score{};
+    std::vector<std::string> covered_tags;
+    std::vector<std::string> uncovered_tags;
+};
+
 } // namespace training

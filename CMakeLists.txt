@@ -24,6 +24,8 @@ add_executable(${PROJECT_NAME}
     src/api/app.hpp
     src/api/route_registry.hpp
     src/api/route_registry.cpp
+    src/algorithms/training_plan_algorithms.cpp
+    src/algorithms/training_plan_algorithms.hpp
     src/logging/logging.hpp
     src/logging/logging.cpp
     src/db/connection_pool.cpp
@@ -99,8 +101,11 @@ enable_testing()
 add_executable(try-crow-tests
     tests/unit/auth_service_test.cpp
     tests/unit/output_comparator_test.cpp
+    tests/unit/training_plan_algorithms_test.cpp
     tests/db/auth_repository_test.cpp
     tests/db/judge_repository_queue_test.cpp
+    src/algorithms/training_plan_algorithms.cpp
+    src/algorithms/training_plan_algorithms.hpp
     src/db/connection_pool.cpp
     src/db/connection_pool.hpp
     src/db/database.cpp
@@ -117,6 +122,7 @@ add_executable(try-crow-tests
     src/domain/judge/judge_repository.hpp
     src/domain/judge/output_comparator.cpp
     src/domain/judge/output_comparator.hpp
+    src/domain/training/training_models.hpp
 )
 
 target_include_directories(try-crow-tests PRIVATE

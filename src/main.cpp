@@ -11,7 +11,7 @@ int main() {
     try {
         initSpdlog();
         installCrowLogger();
-        
+
         ConnectionPool connection_pool{Database::appConninfo()};
         Database::ensureDatabase();
         Database::ensureSchema();
@@ -22,13 +22,16 @@ int main() {
         App app;
         auto &cors = app.get_middleware<crow::CORSHandler>();
         cors.global()
-        .origin("*")
-        .methods(crow::HTTPMethod::Get, crow::HTTPMethod::Post,
-            crow::HTTPMethod::Put, crow::HTTPMethod::Delete,
-            crow::HTTPMethod::Options)
+            .origin("*")
+            .methods(
+                crow::HTTPMethod::Get,
+                crow::HTTPMethod::Post,
+                crow::HTTPMethod::Put,
+                crow::HTTPMethod::Delete,
+                crow::HTTPMethod::Options)
             .headers("Content-Type", "Authorization")
             .max_age(600);
-            
+
         RouteRegistry::routeRegistry().apply(app, connection_pool);
 
         spdlog::info("server starting at http://0.0.0.0:{}", config::SERVER_PORT);
