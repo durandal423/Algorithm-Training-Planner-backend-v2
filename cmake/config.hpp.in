@@ -1,0 +1,23 @@
+#pragma once
+
+namespace config {
+
+inline constexpr char BACKEND_SOURCE_DIR[] = "@CMAKE_SOURCE_DIR@";
+
+inline constexpr char APP_DATABASE_HOST[] = "@APP_DATABASE_HOST@";
+inline constexpr char APP_DATABASE_PORT[] = "@APP_DATABASE_PORT@";
+inline constexpr char APP_DATABASE_USER[] = "@APP_DATABASE_USER@";
+inline constexpr char APP_DATABASE_NAME[] = "@APP_DATABASE_NAME@";
+inline constexpr char APP_DATABASE_PASSWORD[] = "@APP_DATABASE_PASSWORD@";
+inline constexpr char ADMIN_DATABASE_NAME[] = "@ADMIN_DATABASE_NAME@";
+inline constexpr int SERVER_PORT = 8080;
+
+inline constexpr int CONNECTION_POOL_MAX_SIZE = 8;
+inline constexpr int CONNECTION_POOL_IDLE_TIMEOUT_MINUTES = 20;
+
+inline constexpr char JUDGE_DOCKER_POOL_NAME_PREFIX[] = "atp-judge-sandbox";
+inline constexpr char JUDGE_DOCKER_WORK_ROOT[] = "@CMAKE_SOURCE_DIR@/.judge-work";
+inline constexpr int JUDGE_DOCKER_POOL_SIZE = 4;
+inline constexpr int JUDGE_DOCKER_POOL_MEMORY_MB = 1024;
+
+} // namespace config

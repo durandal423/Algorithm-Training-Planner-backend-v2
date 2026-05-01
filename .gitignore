@@ -1,0 +1,8 @@
+build/
+参考/
+.cache/
+vcpkg_installed/
+.judge-work/
+
+.clang-format
+.env

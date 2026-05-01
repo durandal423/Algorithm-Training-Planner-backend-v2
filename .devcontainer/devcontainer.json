@@ -1,0 +1,44 @@
+{
+  "name": "cpp-project",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "args": {
+      "HTTP_PROXY": "${localEnv:HTTP_PROXY}",
+      "HTTPS_PROXY": "${localEnv:HTTPS_PROXY}",
+      "NO_PROXY": "${localEnv:NO_PROXY}",
+      "GCC_VERSION": "12",
+      "CMAKE_VERSION": "3.31.11",
+      "VCPKG_COMMIT": "c3867e714dd3a51c272826eea77267876517ed99"
+    }
+  },
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+  "mounts": [
+    "source=devcontainer-vscode-server,target=/home/vscode/.vscode-server,type=volume",
+    "source=cpp-vcpkg-downloads,target=/usr/local/vcpkg-downloads,type=volume",
+    "source=cpp-vcpkg-bincache,target=/var/cache/vcpkg,type=volume",
+    "source=cpp-sccache,target=/var/cache/sccache,type=volume",
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+  ],
+  "containerEnv": {
+    "HTTP_PROXY": "${localEnv:HTTP_PROXY}",
+    "HTTPS_PROXY": "${localEnv:HTTPS_PROXY}",
+    "NO_PROXY": "${localEnv:NO_PROXY}",
+    "http_proxy": "${localEnv:HTTP_PROXY}",
+    "https_proxy": "${localEnv:HTTPS_PROXY}",
+    "no_proxy": "${localEnv:NO_PROXY}",
+    "VCPKG_DOWNLOADS": "/usr/local/vcpkg-downloads",
+    "VCPKG_DEFAULT_BINARY_CACHE": "/var/cache/vcpkg",
+    "SCCACHE_DIR": "/var/cache/sccache"
+  },
+  "postCreateCommand": "bash /workspace/.devcontainer/post-create.sh",
+  "remoteUser": "vscode",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cmake-tools",
+        "llvm-vs-code-extensions.vscode-clangd"
+      ]
+    }
+  }
+}

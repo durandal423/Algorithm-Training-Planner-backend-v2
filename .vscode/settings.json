@@ -1,0 +1,8 @@
+{
+  "cmake.configureSettings": {
+    "CMAKE_TOOLCHAIN_FILE": "/usr/local/vcpkg/scripts/buildsystems/vcpkg.cmake",
+    "CMAKE_C_COMPILER_LAUNCHER": "sccache",
+    "CMAKE_CXX_COMPILER_LAUNCHER": "sccache",
+    "SPDLOG_BUILD_TESTS": "ON"
+  }
+}
