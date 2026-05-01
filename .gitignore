@@ -3,6 +3,7 @@ build/
 .cache/
 vcpkg_installed/
 .judge-work/
+docs/
 
 .clang-format
 .env

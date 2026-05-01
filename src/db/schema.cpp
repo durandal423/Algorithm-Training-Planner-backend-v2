@@ -18,6 +18,7 @@ namespace {
 
 constexpr std::array kRequiredTables{
     "users",
+    "user_sessions",
     "problems",
     "tags",
     "problem_tags",
@@ -26,11 +27,11 @@ constexpr std::array kRequiredTables{
     "training_plans",
     "training_plan_items",
     "training_records",
-    "training_sessions",
     "judge_configs",
     "judge_test_cases",
     "submissions",
-    "submission_results"
+    "submission_results",
+    "audit_logs"
 };
 
 struct MigrationScript {
@@ -49,6 +50,11 @@ constexpr std::array kMigrations{
         2,
         "002_seed.sql",
         "seed initial data"
+    },
+    MigrationScript{
+        3,
+        "003_oj_schema.sql",
+        "create oj platform schema"
     }
 };
 
@@ -68,6 +74,15 @@ std::string read_file(const std::filesystem::path& path) {
     std::ostringstream buffer;
     buffer << input.rdbuf();
     return buffer.str();
+}
+
+bool is_blank(std::string_view text) {
+    for (const char ch : text) {
+        if (ch != ' ' && ch != '\n' && ch != '\r' && ch != '\t') {
+            return false;
+        }
+    }
+    return true;
 }
 
 std::string join_names(const std::vector<std::string>& names) {
@@ -170,7 +185,9 @@ void apply_migration(
         path.string()
     );
 
-    tx.exec(sql).no_rows();
+    if (!is_blank(sql)) {
+        tx.exec(sql).no_rows();
+    }
 
     record_migration(tx, migration);
 

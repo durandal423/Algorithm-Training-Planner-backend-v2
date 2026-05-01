@@ -11,6 +11,7 @@ configure_file(
 )
 
 find_package(libpqxx CONFIG REQUIRED)
+find_package(unofficial-sodium CONFIG REQUIRED)
 find_package(Crow CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
@@ -31,6 +32,37 @@ add_executable(${PROJECT_NAME}
     src/db/database.cpp
     src/db/database.hpp
     src/domain/hello/hello_routes.cpp
+    src/domain/auth/auth_http.cpp
+    src/domain/auth/auth_http.hpp
+    src/domain/auth/auth_models.hpp
+    src/domain/auth/auth_repository.cpp
+    src/domain/auth/auth_repository.hpp
+    src/domain/auth/auth_routes.cpp
+    src/domain/auth/auth_service.cpp
+    src/domain/auth/auth_service.hpp
+    src/domain/problem/problem_models.hpp
+    src/domain/problem/problem_repository.cpp
+    src/domain/problem/problem_repository.hpp
+    src/domain/problem/problem_routes.cpp
+    src/domain/training/training_models.hpp
+    src/domain/training/training_repository.cpp
+    src/domain/training/training_repository.hpp
+    src/domain/judge/judge_dispatcher.cpp
+    src/domain/judge/judge_dispatcher.hpp
+    src/domain/judge/judge_models.hpp
+    src/domain/judge/judge_repository.cpp
+    src/domain/judge/judge_repository.hpp
+    src/domain/judge/judge_routes.cpp
+    src/domain/judge/judge_service.cpp
+    src/domain/judge/judge_service.hpp
+    src/domain/judge/output_comparator.cpp
+    src/domain/judge/output_comparator.hpp
+    src/domain/judge/sandbox_runner.cpp
+    src/domain/judge/sandbox_runner.hpp
+    src/domain/admin/admin_models.hpp
+    src/domain/admin/admin_repository.cpp
+    src/domain/admin/admin_repository.hpp
+    src/domain/admin/admin_routes.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE 
@@ -52,6 +84,7 @@ endif()
 
 target_link_libraries(${PROJECT_NAME} PRIVATE 
     libpqxx::pqxx
+    unofficial-sodium::sodium
     Crow::Crow
     nlohmann_json::nlohmann_json
     spdlog::spdlog

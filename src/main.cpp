@@ -1,5 +1,6 @@
 #include "api/route_registry.hpp"
 #include "db/database.hpp"
+#include "domain/judge/judge_dispatcher.hpp"
 
 #include "config.hpp"
 
@@ -13,6 +14,8 @@ int main() {
         ConnectionPool connection_pool{Database::appConninfo()};
         Database::ensureDatabase();
         Database::ensureSchema();
+        judge::JudgeDispatcher judge_dispatcher{connection_pool};
+        judge_dispatcher.start();
 
         App app;
         auto &cors = app.get_middleware<crow::CORSHandler>();
