@@ -1,10 +1,12 @@
 #include "api/route_registry.hpp"
+#include "api/http_json.hpp"
 #include "domain/auth/auth_http.hpp"
 #include "domain/problem/problem_repository.hpp"
 
 #include <nlohmann/json.hpp>
 
 #include <exception>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -45,31 +47,8 @@ nlohmann::json problem_json(const problem::Problem& problem) {
     };
 }
 
-crow::response json_response(int status, const nlohmann::json& body) {
-    crow::response response{status};
-    response.set_header("Content-Type", "application/json");
-    response.write(body.dump());
-    return response;
-}
-
-std::optional<std::string> optional_string(const nlohmann::json& body, const char* key) {
-    if (!body.contains(key) || body.at(key).is_null()) {
-        return std::nullopt;
-    }
-    return body.at(key).get<std::string>();
-}
-
 std::vector<std::string> tag_names_from_json(const nlohmann::json& body) {
-    std::vector<std::string> tags;
-    if (!body.contains("tags") || !body.at("tags").is_array()) {
-        return tags;
-    }
-    for (const auto& tag : body.at("tags")) {
-        if (tag.is_string()) {
-            tags.push_back(tag.get<std::string>());
-        }
-    }
-    return tags;
+    return api::string_array(body, "tags");
 }
 
 problem::Problem problem_from_json(
@@ -80,7 +59,7 @@ problem::Problem problem_from_json(
     problem.code = body.at("code").get<std::string>();
     problem.title = body.at("title").get<std::string>();
     problem.source_platform = body.value("sourcePlatform", std::string{"local"});
-    problem.source_url = optional_string(body, "sourceUrl");
+    problem.source_url = api::optional_string(body, "sourceUrl");
     problem.difficulty = body.at("difficulty").get<int>();
     problem.estimated_minutes = body.value("estimatedMinutes", 30);
     problem.description = body.value("description", std::string{});
@@ -111,11 +90,11 @@ RouteRegistration problemRoutesRegistration([](App& app, ConnectionPool& connect
         if (const char* tag = req.url_params.get("tag")) {
             filter.tag = tag;
         }
-        if (const char* limit = req.url_params.get("limit")) {
-            filter.limit = std::stoi(limit);
+        if (const auto limit = api::optional_query_int(req, "limit")) {
+            filter.limit = *limit;
         }
-        if (const char* offset = req.url_params.get("offset")) {
-            filter.offset = std::stoi(offset);
+        if (const auto offset = api::optional_query_int(req, "offset")) {
+            filter.offset = *offset;
         }
 
         problem::ProblemRepository repository{connection_pool};
@@ -123,7 +102,7 @@ RouteRegistration problemRoutesRegistration([](App& app, ConnectionPool& connect
         for (const auto& problem : repository.listProblems(filter)) {
             items.push_back(problem_json(problem));
         }
-        return json_response(200, {{"items", items}});
+        return api::json_response(200, {{"items", items}});
     });
 
     CROW_ROUTE(app, "/api/problems/<int>")
@@ -132,9 +111,9 @@ RouteRegistration problemRoutesRegistration([](App& app, ConnectionPool& connect
         problem::ProblemRepository repository{connection_pool};
         const auto item = repository.getProblem(id, is_admin(connection_pool, req));
         if (!item) {
-            return json_response(404, {{"error", "problem not found"}});
+            return api::json_response(404, {{"error", "problem not found"}});
         }
-        return json_response(200, {{"problem", problem_json(*item)}});
+        return api::json_response(200, {{"problem", problem_json(*item)}});
     });
 
     CROW_ROUTE(app, "/api/tags")
@@ -145,7 +124,7 @@ RouteRegistration problemRoutesRegistration([](App& app, ConnectionPool& connect
         for (const auto& tag : repository.listTags()) {
             items.push_back(tag_json(tag));
         }
-        return json_response(200, {{"items", items}});
+        return api::json_response(200, {{"items", items}});
     });
 
     CROW_ROUTE(app, "/api/admin/problems")
@@ -159,13 +138,13 @@ RouteRegistration problemRoutesRegistration([](App& app, ConnectionPool& connect
                 problem_from_json(body, admin.id),
                 tag_names_from_json(body)
             );
-            return json_response(201, {{"id", id}});
+            return api::json_response(201, {{"id", id}});
         } catch (const auth::Unauthorized& error) {
-            return json_response(401, {{"error", error.what()}});
+            return api::json_response(401, {{"error", error.what()}});
         } catch (const auth::Forbidden& error) {
-            return json_response(403, {{"error", error.what()}});
+            return api::json_response(403, {{"error", error.what()}});
         } catch (const std::exception& error) {
-            return json_response(400, {{"error", error.what()}});
+            return api::json_response(400, {{"error", error.what()}});
         }
     });
 
@@ -177,8 +156,8 @@ RouteRegistration problemRoutesRegistration([](App& app, ConnectionPool& connect
             problem::ProblemRepository repository{connection_pool};
             if (req.method == crow::HTTPMethod::Delete) {
                 return repository.deleteProblem(id)
-                    ? json_response(200, {{"deleted", true}})
-                    : json_response(404, {{"error", "problem not found"}});
+                    ? api::json_response(200, {{"deleted", true}})
+                    : api::json_response(404, {{"error", "problem not found"}});
             }
             const auto body = nlohmann::json::parse(req.body);
             const bool updated = repository.updateProblem(
@@ -187,14 +166,14 @@ RouteRegistration problemRoutesRegistration([](App& app, ConnectionPool& connect
                 tag_names_from_json(body)
             );
             return updated
-                ? json_response(200, {{"updated", true}})
-                : json_response(404, {{"error", "problem not found"}});
+                ? api::json_response(200, {{"updated", true}})
+                : api::json_response(404, {{"error", "problem not found"}});
         } catch (const auth::Unauthorized& error) {
-            return json_response(401, {{"error", error.what()}});
+            return api::json_response(401, {{"error", error.what()}});
         } catch (const auth::Forbidden& error) {
-            return json_response(403, {{"error", error.what()}});
+            return api::json_response(403, {{"error", error.what()}});
         } catch (const std::exception& error) {
-            return json_response(400, {{"error", error.what()}});
+            return api::json_response(400, {{"error", error.what()}});
         }
     });
 });

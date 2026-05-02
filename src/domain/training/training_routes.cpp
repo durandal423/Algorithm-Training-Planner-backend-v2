@@ -1,4 +1,5 @@
 #include "api/route_registry.hpp"
+#include "api/http_json.hpp"
 #include "algorithms/training_plan_algorithms.hpp"
 #include "domain/auth/auth_http.hpp"
 #include "domain/training/training_repository.hpp"
@@ -11,40 +12,6 @@
 #include <vector>
 
 namespace {
-
-crow::response json_response(int status, const nlohmann::json& body) {
-    crow::response response{status};
-    response.set_header("Content-Type", "application/json");
-    response.write(body.dump());
-    return response;
-}
-
-std::optional<int> optional_int(const nlohmann::json& body, const char* key) {
-    if (!body.contains(key) || body.at(key).is_null()) {
-        return std::nullopt;
-    }
-    return body.at(key).get<int>();
-}
-
-std::optional<long long> optional_long(const nlohmann::json& body, const char* key) {
-    if (!body.contains(key) || body.at(key).is_null()) {
-        return std::nullopt;
-    }
-    return body.at(key).get<long long>();
-}
-
-std::vector<std::string> string_array(const nlohmann::json& body, const char* key) {
-    std::vector<std::string> values;
-    if (!body.contains(key) || !body.at(key).is_array()) {
-        return values;
-    }
-    for (const auto& value : body.at(key)) {
-        if (value.is_string()) {
-            values.push_back(value.get<std::string>());
-        }
-    }
-    return values;
-}
 
 nlohmann::json goal_json(const training::TrainingGoal& goal) {
     return {
@@ -76,8 +43,8 @@ training::TrainingGoal goal_from_json(
     goal.name = body.at("name").get<std::string>();
     goal.target_count = body.value("targetCount", 10);
     goal.time_budget_minutes = body.value("timeBudgetMinutes", 180);
-    goal.difficulty_min = optional_int(body, "difficultyMin");
-    goal.difficulty_max = optional_int(body, "difficultyMax");
+    goal.difficulty_min = api::optional_int(body, "difficultyMin");
+    goal.difficulty_max = api::optional_int(body, "difficultyMax");
     goal.prefer_wrong_problems = body.value("preferWrongProblems", true);
     goal.prefer_weak_tags = body.value("preferWeakTags", true);
     goal.difficulty_weight = body.value("difficultyWeight", 10);
@@ -85,7 +52,7 @@ training::TrainingGoal goal_from_json(
     goal.wrong_problem_weight = body.value("wrongProblemWeight", 15);
     goal.weak_tag_weight = body.value("weakTagWeight", 15);
     goal.estimated_time_weight = body.value("estimatedTimeWeight", 1);
-    goal.tag_names = string_array(body, "tags");
+    goal.tag_names = api::string_array(body, "tags");
     return goal;
 }
 
@@ -157,17 +124,17 @@ RouteRegistration trainingRoutesRegistration([](App& app, ConnectionPool& connec
                 for (const auto& goal : repository.listGoals(user.id)) {
                     items.push_back(goal_json(goal));
                 }
-                return json_response(200, {{"items", items}});
+                return api::json_response(200, {{"items", items}});
             }
 
             const auto body = nlohmann::json::parse(req.body);
             const auto id = repository.createGoal(goal_from_json(body, user.id));
             const auto goal = repository.getGoal(id, user.id);
-            return json_response(201, {{"goal", goal_json(*goal)}});
+            return api::json_response(201, {{"goal", goal_json(*goal)}});
         } catch (const auth::Unauthorized& error) {
-            return json_response(401, {{"error", error.what()}});
+            return api::json_response(401, {{"error", error.what()}});
         } catch (const std::exception& error) {
-            return json_response(400, {{"error", error.what()}});
+            return api::json_response(400, {{"error", error.what()}});
         }
     });
 
@@ -180,26 +147,26 @@ RouteRegistration trainingRoutesRegistration([](App& app, ConnectionPool& connec
             if (req.method == crow::HTTPMethod::Get) {
                 const auto goal = repository.getGoal(id, user.id);
                 return goal
-                    ? json_response(200, {{"goal", goal_json(*goal)}})
-                    : json_response(404, {{"error", "training goal not found"}});
+                    ? api::json_response(200, {{"goal", goal_json(*goal)}})
+                    : api::json_response(404, {{"error", "training goal not found"}});
             }
             if (req.method == crow::HTTPMethod::Delete) {
                 return repository.deleteGoal(id, user.id)
-                    ? json_response(200, {{"deleted", true}})
-                    : json_response(404, {{"error", "training goal not found"}});
+                    ? api::json_response(200, {{"deleted", true}})
+                    : api::json_response(404, {{"error", "training goal not found"}});
             }
 
             const auto body = nlohmann::json::parse(req.body);
             const bool updated = repository.updateGoal(id, goal_from_json(body, user.id));
             if (!updated) {
-                return json_response(404, {{"error", "training goal not found"}});
+                return api::json_response(404, {{"error", "training goal not found"}});
             }
             const auto goal = repository.getGoal(id, user.id);
-            return json_response(200, {{"goal", goal_json(*goal)}});
+            return api::json_response(200, {{"goal", goal_json(*goal)}});
         } catch (const auth::Unauthorized& error) {
-            return json_response(401, {{"error", error.what()}});
+            return api::json_response(401, {{"error", error.what()}});
         } catch (const std::exception& error) {
-            return json_response(400, {{"error", error.what()}});
+            return api::json_response(400, {{"error", error.what()}});
         }
     });
 
@@ -209,15 +176,15 @@ RouteRegistration trainingRoutesRegistration([](App& app, ConnectionPool& connec
         try {
             const auto user = auth::requireUser(connection_pool, req);
             const auto body = nlohmann::json::parse(req.body);
-            const auto goal_id = optional_long(body, "goalId");
+            const auto goal_id = api::optional_long(body, "goalId");
             if (!goal_id) {
-                return json_response(400, {{"error", "goalId is required"}});
+                return api::json_response(400, {{"error", "goalId is required"}});
             }
 
             training::TrainingRepository repository{connection_pool};
             const auto goal = repository.getGoal(*goal_id, user.id);
             if (!goal) {
-                return json_response(404, {{"error", "training goal not found"}});
+                return api::json_response(404, {{"error", "training goal not found"}});
             }
 
             const auto candidates = repository.listProblemCandidates(*goal, user.role == "admin");
@@ -245,14 +212,14 @@ RouteRegistration trainingRoutesRegistration([](App& app, ConnectionPool& connec
             const auto plan_id = repository.createPlan(plan, items);
             const auto saved_plan = repository.getPlan(plan_id, user.id);
             const auto saved_items = repository.listPlanItems(plan_id);
-            return json_response(201, {
+            return api::json_response(201, {
                 {"plan", plan_json(*saved_plan)},
                 {"items", items_json(saved_items)}
             });
         } catch (const auth::Unauthorized& error) {
-            return json_response(401, {{"error", error.what()}});
+            return api::json_response(401, {{"error", error.what()}});
         } catch (const std::exception& error) {
-            return json_response(400, {{"error", error.what()}});
+            return api::json_response(400, {{"error", error.what()}});
         }
     });
 
@@ -266,11 +233,11 @@ RouteRegistration trainingRoutesRegistration([](App& app, ConnectionPool& connec
             for (const auto& plan : repository.listPlans(user.id)) {
                 items.push_back(plan_json(plan));
             }
-            return json_response(200, {{"items", items}});
+            return api::json_response(200, {{"items", items}});
         } catch (const auth::Unauthorized& error) {
-            return json_response(401, {{"error", error.what()}});
+            return api::json_response(401, {{"error", error.what()}});
         } catch (const std::exception& error) {
-            return json_response(400, {{"error", error.what()}});
+            return api::json_response(400, {{"error", error.what()}});
         }
     });
 
@@ -282,16 +249,16 @@ RouteRegistration trainingRoutesRegistration([](App& app, ConnectionPool& connec
             training::TrainingRepository repository{connection_pool};
             const auto plan = repository.getPlan(id, user.id);
             if (!plan) {
-                return json_response(404, {{"error", "training plan not found"}});
+                return api::json_response(404, {{"error", "training plan not found"}});
             }
-            return json_response(200, {
+            return api::json_response(200, {
                 {"plan", plan_json(*plan)},
                 {"items", items_json(repository.listPlanItems(id))}
             });
         } catch (const auth::Unauthorized& error) {
-            return json_response(401, {{"error", error.what()}});
+            return api::json_response(401, {{"error", error.what()}});
         } catch (const std::exception& error) {
-            return json_response(400, {{"error", error.what()}});
+            return api::json_response(400, {{"error", error.what()}});
         }
     });
 
@@ -303,13 +270,13 @@ RouteRegistration trainingRoutesRegistration([](App& app, ConnectionPool& connec
             training::TrainingRepository repository{connection_pool};
             const auto plan = repository.getPlan(id, user.id);
             if (!plan) {
-                return json_response(404, {{"error", "training plan not found"}});
+                return api::json_response(404, {{"error", "training plan not found"}});
             }
-            return json_response(200, {{"items", items_json(repository.listPlanItems(id))}});
+            return api::json_response(200, {{"items", items_json(repository.listPlanItems(id))}});
         } catch (const auth::Unauthorized& error) {
-            return json_response(401, {{"error", error.what()}});
+            return api::json_response(401, {{"error", error.what()}});
         } catch (const std::exception& error) {
-            return json_response(400, {{"error", error.what()}});
+            return api::json_response(400, {{"error", error.what()}});
         }
     });
 });

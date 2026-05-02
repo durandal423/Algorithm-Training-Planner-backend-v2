@@ -22,6 +22,8 @@ option(TRY_CROW_ENABLE_PCH "Enable precompiled headers for faster local rebuilds
 add_executable(${PROJECT_NAME} 
     src/main.cpp
     src/api/app.hpp
+    src/api/http_json.hpp
+    src/api/http_json.cpp
     src/api/route_registry.hpp
     src/api/route_registry.cpp
     src/algorithms/training_plan_algorithms.cpp

@@ -1,4 +1,5 @@
 #include "api/route_registry.hpp"
+#include "api/http_json.hpp"
 #include "domain/auth/auth_http.hpp"
 #include "domain/judge/judge_repository.hpp"
 
@@ -10,48 +11,20 @@
 
 namespace {
 
-crow::response json_response(int status, const nlohmann::json& body) {
-    crow::response response{status};
-    response.set_header("Content-Type", "application/json");
-    response.write(body.dump());
-    return response;
-}
-
-std::optional<std::string> optional_string(const nlohmann::json& body, const char* key) {
-    if (!body.contains(key) || body.at(key).is_null()) {
-        return std::nullopt;
-    }
-    return body.at(key).get<std::string>();
-}
-
-std::optional<int> optional_int(const nlohmann::json& body, const char* key) {
-    if (!body.contains(key) || body.at(key).is_null()) {
-        return std::nullopt;
-    }
-    return body.at(key).get<int>();
-}
-
-std::optional<long long> optional_long_param(const crow::request& req, const char* key) {
-    if (const char* value = req.url_params.get(key)) {
-        return std::stoll(value);
-    }
-    return std::nullopt;
-}
-
 void apply_submission_query(judge::SubmissionFilter& filter, const crow::request& req) {
-    filter.problem_id = optional_long_param(req, "problemId");
-    filter.user_id = optional_long_param(req, "userId");
+    filter.problem_id = api::optional_query_long(req, "problemId");
+    filter.user_id = api::optional_query_long(req, "userId");
     if (const char* status = req.url_params.get("status")) {
         filter.status = status;
     }
     if (const char* verdict = req.url_params.get("verdict")) {
         filter.verdict = verdict;
     }
-    if (const char* limit = req.url_params.get("limit")) {
-        filter.limit = std::stoi(limit);
+    if (const auto limit = api::optional_query_int(req, "limit")) {
+        filter.limit = *limit;
     }
-    if (const char* offset = req.url_params.get("offset")) {
-        filter.offset = std::stoi(offset);
+    if (const auto offset = api::optional_query_int(req, "offset")) {
+        filter.offset = *offset;
     }
 }
 
@@ -76,8 +49,8 @@ judge::JudgeConfig config_from_json(long long problem_id, const nlohmann::json& 
     config.problem_id = problem_id;
     config.enabled = body.value("enabled", false);
     config.language = body.value("language", std::string{"cpp"});
-    config.compile_command_template = optional_string(body, "compileCommandTemplate");
-    config.run_command_template = optional_string(body, "runCommandTemplate");
+    config.compile_command_template = api::optional_string(body, "compileCommandTemplate");
+    config.run_command_template = api::optional_string(body, "runCommandTemplate");
     config.time_limit_ms = body.value("timeLimitMs", 1000);
     config.memory_limit_mb = body.value("memoryLimitMb", 256);
     config.output_limit_kb = body.value("outputLimitKb", 1024);
@@ -106,12 +79,12 @@ judge::JudgeTestCase test_case_from_json(long long problem_id, const nlohmann::j
     test_case.problem_id = problem_id;
     test_case.name = body.value("name", std::string{});
     test_case.input_data = body.at("inputData").get<std::string>();
-    test_case.expected_output = optional_string(body, "expectedOutput");
+    test_case.expected_output = api::optional_string(body, "expectedOutput");
     test_case.visibility = body.value("visibility", std::string{"hidden"});
     test_case.points = body.value("points", 1);
     test_case.order_index = body.value("orderIndex", 0);
-    test_case.time_limit_ms = optional_int(body, "timeLimitMs");
-    test_case.memory_limit_mb = optional_int(body, "memoryLimitMb");
+    test_case.time_limit_ms = api::optional_int(body, "timeLimitMs");
+    test_case.memory_limit_mb = api::optional_int(body, "memoryLimitMb");
     return test_case;
 }
 
@@ -176,11 +149,11 @@ RouteRegistration judgeRoutesRegistration([](App& app, ConnectionPool& connectio
             for (const auto& submission : repository.listSubmissions(filter)) {
                 items.push_back(submission_json(submission, false));
             }
-            return json_response(200, {{"items", items}});
+            return api::json_response(200, {{"items", items}});
         } catch (const auth::Unauthorized& error) {
-            return json_response(401, {{"error", error.what()}});
+            return api::json_response(401, {{"error", error.what()}});
         } catch (const std::exception& error) {
-            return json_response(400, {{"error", error.what()}});
+            return api::json_response(400, {{"error", error.what()}});
         }
     });
 
@@ -192,7 +165,7 @@ RouteRegistration judgeRoutesRegistration([](App& app, ConnectionPool& connectio
             const auto body = nlohmann::json::parse(req.body);
             const auto source_code = body.at("sourceCode").get<std::string>();
             if (source_code.empty() || source_code.size() > 256 * 1024) {
-                return json_response(400, {{"error", "sourceCode must be 1 to 262144 bytes"}});
+                return api::json_response(400, {{"error", "sourceCode must be 1 to 262144 bytes"}});
             }
 
             judge::Submission submission;
@@ -203,11 +176,11 @@ RouteRegistration judgeRoutesRegistration([](App& app, ConnectionPool& connectio
 
             judge::JudgeRepository repository{connection_pool};
             const auto id = repository.createSubmission(submission);
-            return json_response(201, {{"id", id}, {"status", "queued"}});
+            return api::json_response(201, {{"id", id}, {"status", "queued"}});
         } catch (const auth::Unauthorized& error) {
-            return json_response(401, {{"error", error.what()}});
+            return api::json_response(401, {{"error", error.what()}});
         } catch (const std::exception& error) {
-            return json_response(400, {{"error", error.what()}});
+            return api::json_response(400, {{"error", error.what()}});
         }
     });
 
@@ -219,14 +192,14 @@ RouteRegistration judgeRoutesRegistration([](App& app, ConnectionPool& connectio
             judge::JudgeRepository repository{connection_pool};
             const auto submission = repository.getSubmission(id);
             if (!submission) {
-                return json_response(404, {{"error", "submission not found"}});
+                return api::json_response(404, {{"error", "submission not found"}});
             }
             if (user.role != "admin" && submission->user_id != user.id) {
-                return json_response(403, {{"error", "submission belongs to another user"}});
+                return api::json_response(403, {{"error", "submission belongs to another user"}});
             }
-            return json_response(200, {{"submission", submission_json(*submission, true)}});
+            return api::json_response(200, {{"submission", submission_json(*submission, true)}});
         } catch (const auth::Unauthorized& error) {
-            return json_response(401, {{"error", error.what()}});
+            return api::json_response(401, {{"error", error.what()}});
         }
     });
 
@@ -243,13 +216,13 @@ RouteRegistration judgeRoutesRegistration([](App& app, ConnectionPool& connectio
             for (const auto& submission : repository.listSubmissions(filter)) {
                 items.push_back(submission_json(submission, false));
             }
-            return json_response(200, {{"items", items}});
+            return api::json_response(200, {{"items", items}});
         } catch (const auth::Unauthorized& error) {
-            return json_response(401, {{"error", error.what()}});
+            return api::json_response(401, {{"error", error.what()}});
         } catch (const auth::Forbidden& error) {
-            return json_response(403, {{"error", error.what()}});
+            return api::json_response(403, {{"error", error.what()}});
         } catch (const std::exception& error) {
-            return json_response(400, {{"error", error.what()}});
+            return api::json_response(400, {{"error", error.what()}});
         }
     });
 
@@ -260,14 +233,14 @@ RouteRegistration judgeRoutesRegistration([](App& app, ConnectionPool& connectio
             auth::requireAdmin(connection_pool, req);
             judge::JudgeRepository repository{connection_pool};
             return repository.resetSubmissionForRejudge(id)
-                ? json_response(200, {{"queued", true}})
-                : json_response(404, {{"error", "submission not found"}});
+                ? api::json_response(200, {{"queued", true}})
+                : api::json_response(404, {{"error", "submission not found"}});
         } catch (const auth::Unauthorized& error) {
-            return json_response(401, {{"error", error.what()}});
+            return api::json_response(401, {{"error", error.what()}});
         } catch (const auth::Forbidden& error) {
-            return json_response(403, {{"error", error.what()}});
+            return api::json_response(403, {{"error", error.what()}});
         } catch (const std::exception& error) {
-            return json_response(400, {{"error", error.what()}});
+            return api::json_response(400, {{"error", error.what()}});
         }
     });
 
@@ -280,20 +253,20 @@ RouteRegistration judgeRoutesRegistration([](App& app, ConnectionPool& connectio
             if (req.method == crow::HTTPMethod::Get) {
                 const auto config = repository.getConfig(problem_id);
                 if (!config) {
-                    return json_response(404, {{"error", "judge config not found"}});
+                    return api::json_response(404, {{"error", "judge config not found"}});
                 }
-                return json_response(200, {{"config", config_json(*config)}});
+                return api::json_response(200, {{"config", config_json(*config)}});
             }
 
             const auto body = nlohmann::json::parse(req.body);
             const auto config = repository.upsertConfig(config_from_json(problem_id, body));
-            return json_response(200, {{"config", config_json(config)}});
+            return api::json_response(200, {{"config", config_json(config)}});
         } catch (const auth::Unauthorized& error) {
-            return json_response(401, {{"error", error.what()}});
+            return api::json_response(401, {{"error", error.what()}});
         } catch (const auth::Forbidden& error) {
-            return json_response(403, {{"error", error.what()}});
+            return api::json_response(403, {{"error", error.what()}});
         } catch (const std::exception& error) {
-            return json_response(400, {{"error", error.what()}});
+            return api::json_response(400, {{"error", error.what()}});
         }
     });
 
@@ -308,18 +281,18 @@ RouteRegistration judgeRoutesRegistration([](App& app, ConnectionPool& connectio
                 for (const auto& test_case : repository.listTestCases(problem_id, true)) {
                     items.push_back(test_case_json(test_case));
                 }
-                return json_response(200, {{"items", items}});
+                return api::json_response(200, {{"items", items}});
             }
 
             const auto body = nlohmann::json::parse(req.body);
             const auto id = repository.createTestCase(test_case_from_json(problem_id, body));
-            return json_response(201, {{"id", id}});
+            return api::json_response(201, {{"id", id}});
         } catch (const auth::Unauthorized& error) {
-            return json_response(401, {{"error", error.what()}});
+            return api::json_response(401, {{"error", error.what()}});
         } catch (const auth::Forbidden& error) {
-            return json_response(403, {{"error", error.what()}});
+            return api::json_response(403, {{"error", error.what()}});
         } catch (const std::exception& error) {
-            return json_response(400, {{"error", error.what()}});
+            return api::json_response(400, {{"error", error.what()}});
         }
     });
 
@@ -331,22 +304,22 @@ RouteRegistration judgeRoutesRegistration([](App& app, ConnectionPool& connectio
             judge::JudgeRepository repository{connection_pool};
             if (req.method == crow::HTTPMethod::Delete) {
                 return repository.deleteTestCase(id)
-                    ? json_response(200, {{"deleted", true}})
-                    : json_response(404, {{"error", "judge test case not found"}});
+                    ? api::json_response(200, {{"deleted", true}})
+                    : api::json_response(404, {{"error", "judge test case not found"}});
             }
 
             const auto body = nlohmann::json::parse(req.body);
             const auto updated = repository.updateTestCase(id, test_case_from_json(0, body));
             if (!updated) {
-                return json_response(404, {{"error", "judge test case not found"}});
+                return api::json_response(404, {{"error", "judge test case not found"}});
             }
-            return json_response(200, {{"testCase", test_case_json(*updated)}});
+            return api::json_response(200, {{"testCase", test_case_json(*updated)}});
         } catch (const auth::Unauthorized& error) {
-            return json_response(401, {{"error", error.what()}});
+            return api::json_response(401, {{"error", error.what()}});
         } catch (const auth::Forbidden& error) {
-            return json_response(403, {{"error", error.what()}});
+            return api::json_response(403, {{"error", error.what()}});
         } catch (const std::exception& error) {
-            return json_response(400, {{"error", error.what()}});
+            return api::json_response(400, {{"error", error.what()}});
         }
     });
 });
