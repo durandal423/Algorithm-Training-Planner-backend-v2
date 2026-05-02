@@ -1,5 +1,7 @@
 #pragma once
 
+#include <nlohmann/json.hpp>
+
 #include <optional>
 #include <string>
 #include <vector>
@@ -25,6 +27,27 @@ struct TrainingGoal {
     std::vector<std::string> tag_names;
 };
 
+inline void to_json(nlohmann::json& json, const TrainingGoal& goal) {
+    json = {
+        {"id", goal.id},
+        {"userId", goal.user_id},
+        {"name", goal.name},
+        {"targetCount", goal.target_count},
+        {"timeBudgetMinutes", goal.time_budget_minutes},
+        {"difficultyMin", goal.difficulty_min},
+        {"difficultyMax", goal.difficulty_max},
+        {"preferWrongProblems", goal.prefer_wrong_problems},
+        {"preferWeakTags", goal.prefer_weak_tags},
+        {"difficultyWeight", goal.difficulty_weight},
+        {"tagCoverageWeight", goal.tag_coverage_weight},
+        {"wrongProblemWeight", goal.wrong_problem_weight},
+        {"weakTagWeight", goal.weak_tag_weight},
+        {"estimatedTimeWeight", goal.estimated_time_weight},
+        {"createdAt", goal.created_at},
+        {"tags", goal.tag_names}
+    };
+}
+
 struct TrainingPlan {
     long long id{};
     long long user_id{};
@@ -37,6 +60,21 @@ struct TrainingPlan {
     std::string algorithm_summary;
     std::string created_at;
 };
+
+inline void to_json(nlohmann::json& json, const TrainingPlan& plan) {
+    json = {
+        {"id", plan.id},
+        {"userId", plan.user_id},
+        {"goalId", plan.goal_id},
+        {"name", plan.name},
+        {"status", plan.status},
+        {"candidateCount", plan.candidate_count},
+        {"selectedCount", plan.selected_count},
+        {"totalEstimatedMinutes", plan.total_estimated_minutes},
+        {"algorithmSummary", plan.algorithm_summary},
+        {"createdAt", plan.created_at}
+    };
+}
 
 struct TrainingPlanItem {
     long long id{};
@@ -51,6 +89,22 @@ struct TrainingPlanItem {
     std::optional<std::string> last_verdict;
     std::string updated_at;
 };
+
+inline void to_json(nlohmann::json& json, const TrainingPlanItem& item) {
+    json = {
+        {"id", item.id},
+        {"planId", item.plan_id},
+        {"problemId", item.problem_id},
+        {"orderIndex", item.order_index},
+        {"estimatedMinutes", item.estimated_minutes},
+        {"score", item.score},
+        {"selectedReason", item.selected_reason},
+        {"status", item.status},
+        {"lastSubmissionId", item.last_submission_id},
+        {"lastVerdict", item.last_verdict},
+        {"updatedAt", item.updated_at}
+    };
+}
 
 struct TrainingRecord {
     long long id{};

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <nlohmann/json.hpp>
+
 #include <optional>
 #include <string>
 
@@ -26,6 +28,17 @@ struct PublicUser {
     std::string role;
     std::string status;
 };
+
+inline void to_json(nlohmann::json& json, const PublicUser& user) {
+    json = {
+        {"id", user.id},
+        {"username", user.username},
+        {"email", user.email},
+        {"displayName", user.display_name},
+        {"role", user.role},
+        {"status", user.status}
+    };
+}
 
 struct Session {
     long long id{};

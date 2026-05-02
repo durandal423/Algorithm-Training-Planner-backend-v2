@@ -3,49 +3,12 @@
 #include "domain/auth/auth_http.hpp"
 #include "domain/problem/problem_repository.hpp"
 
-#include <nlohmann/json.hpp>
-
 #include <exception>
 #include <optional>
 #include <string>
 #include <vector>
 
 namespace {
-
-nlohmann::json tag_json(const problem::Tag& tag) {
-    return {
-        {"id", tag.id},
-        {"name", tag.name},
-        {"description", tag.description}
-    };
-}
-
-nlohmann::json problem_json(const problem::Problem& problem) {
-    nlohmann::json tags = nlohmann::json::array();
-    for (const auto& tag : problem.tags) {
-        tags.push_back(tag_json(tag));
-    }
-    return {
-        {"id", problem.id},
-        {"code", problem.code},
-        {"title", problem.title},
-        {"sourcePlatform", problem.source_platform},
-        {"sourceUrl", problem.source_url},
-        {"difficulty", problem.difficulty},
-        {"estimatedMinutes", problem.estimated_minutes},
-        {"description", problem.description},
-        {"inputFormat", problem.input_format},
-        {"outputFormat", problem.output_format},
-        {"sampleInput", problem.sample_input},
-        {"sampleOutput", problem.sample_output},
-        {"hint", problem.hint},
-        {"visibility", problem.visibility},
-        {"createdBy", problem.created_by},
-        {"createdAt", problem.created_at},
-        {"updatedAt", problem.updated_at},
-        {"tags", tags}
-    };
-}
 
 std::vector<std::string> tag_names_from_json(const nlohmann::json& body) {
     return api::string_array(body, "tags");
@@ -98,11 +61,7 @@ RouteRegistration problemRoutesRegistration([](App& app, ConnectionPool& connect
         }
 
         problem::ProblemRepository repository{connection_pool};
-        nlohmann::json items = nlohmann::json::array();
-        for (const auto& problem : repository.listProblems(filter)) {
-            items.push_back(problem_json(problem));
-        }
-        return api::json_response(200, {{"items", items}});
+        return api::json_response(200, {{"items", repository.listProblems(filter)}});
     });
 
     CROW_ROUTE(app, "/api/problems/<int>")
@@ -113,18 +72,14 @@ RouteRegistration problemRoutesRegistration([](App& app, ConnectionPool& connect
         if (!item) {
             return api::json_response(404, {{"error", "problem not found"}});
         }
-        return api::json_response(200, {{"problem", problem_json(*item)}});
+        return api::json_response(200, {{"problem", *item}});
     });
 
     CROW_ROUTE(app, "/api/tags")
     .methods(crow::HTTPMethod::Get)
     ([&connection_pool]() -> crow::response {
         problem::ProblemRepository repository{connection_pool};
-        nlohmann::json items = nlohmann::json::array();
-        for (const auto& tag : repository.listTags()) {
-            items.push_back(tag_json(tag));
-        }
-        return api::json_response(200, {{"items", items}});
+        return api::json_response(200, {{"items", repository.listTags()}});
     });
 
     CROW_ROUTE(app, "/api/admin/problems")

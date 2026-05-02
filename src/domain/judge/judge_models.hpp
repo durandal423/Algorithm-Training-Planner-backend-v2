@@ -1,5 +1,7 @@
 #pragma once
 
+#include <nlohmann/json.hpp>
+
 #include <optional>
 #include <string>
 #include <vector>
@@ -20,6 +22,22 @@ struct JudgeConfig {
     double float_epsilon{1e-6};
 };
 
+inline void to_json(nlohmann::json& json, const JudgeConfig& config) {
+    json = {
+        {"id", config.id},
+        {"problemId", config.problem_id},
+        {"enabled", config.enabled},
+        {"language", config.language},
+        {"compileCommandTemplate", config.compile_command_template},
+        {"runCommandTemplate", config.run_command_template},
+        {"timeLimitMs", config.time_limit_ms},
+        {"memoryLimitMb", config.memory_limit_mb},
+        {"outputLimitKb", config.output_limit_kb},
+        {"compareMode", config.compare_mode},
+        {"floatEpsilon", config.float_epsilon}
+    };
+}
+
 struct JudgeTestCase {
     long long id{};
     long long problem_id{};
@@ -32,6 +50,21 @@ struct JudgeTestCase {
     std::optional<int> time_limit_ms;
     std::optional<int> memory_limit_mb;
 };
+
+inline void to_json(nlohmann::json& json, const JudgeTestCase& test_case) {
+    json = {
+        {"id", test_case.id},
+        {"problemId", test_case.problem_id},
+        {"name", test_case.name},
+        {"inputData", test_case.input_data},
+        {"expectedOutput", test_case.expected_output},
+        {"visibility", test_case.visibility},
+        {"points", test_case.points},
+        {"orderIndex", test_case.order_index},
+        {"timeLimitMs", test_case.time_limit_ms},
+        {"memoryLimitMb", test_case.memory_limit_mb}
+    };
+}
 
 struct SubmissionResult {
     long long id{};
@@ -47,6 +80,23 @@ struct SubmissionResult {
     std::string stderr_sample;
     std::string message;
 };
+
+inline void to_json(nlohmann::json& json, const SubmissionResult& result) {
+    json = {
+        {"id", result.id},
+        {"submissionId", result.submission_id},
+        {"testCaseId", result.test_case_id},
+        {"orderIndex", result.order_index},
+        {"status", result.status},
+        {"verdict", result.verdict},
+        {"timeMs", result.time_ms},
+        {"memoryKb", result.memory_kb},
+        {"exitCode", result.exit_code},
+        {"stdoutSample", result.stdout_sample},
+        {"stderrSample", result.stderr_sample},
+        {"message", result.message}
+    };
+}
 
 struct Submission {
     long long id{};

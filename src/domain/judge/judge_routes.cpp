@@ -28,22 +28,6 @@ void apply_submission_query(judge::SubmissionFilter& filter, const crow::request
     }
 }
 
-nlohmann::json config_json(const judge::JudgeConfig& config) {
-    return {
-        {"id", config.id},
-        {"problemId", config.problem_id},
-        {"enabled", config.enabled},
-        {"language", config.language},
-        {"compileCommandTemplate", config.compile_command_template},
-        {"runCommandTemplate", config.run_command_template},
-        {"timeLimitMs", config.time_limit_ms},
-        {"memoryLimitMb", config.memory_limit_mb},
-        {"outputLimitKb", config.output_limit_kb},
-        {"compareMode", config.compare_mode},
-        {"floatEpsilon", config.float_epsilon}
-    };
-}
-
 judge::JudgeConfig config_from_json(long long problem_id, const nlohmann::json& body) {
     judge::JudgeConfig config;
     config.problem_id = problem_id;
@@ -57,21 +41,6 @@ judge::JudgeConfig config_from_json(long long problem_id, const nlohmann::json& 
     config.compare_mode = body.value("compareMode", std::string{"ignore_whitespace"});
     config.float_epsilon = body.value("floatEpsilon", 1e-6);
     return config;
-}
-
-nlohmann::json test_case_json(const judge::JudgeTestCase& test_case) {
-    return {
-        {"id", test_case.id},
-        {"problemId", test_case.problem_id},
-        {"name", test_case.name},
-        {"inputData", test_case.input_data},
-        {"expectedOutput", test_case.expected_output},
-        {"visibility", test_case.visibility},
-        {"points", test_case.points},
-        {"orderIndex", test_case.order_index},
-        {"timeLimitMs", test_case.time_limit_ms},
-        {"memoryLimitMb", test_case.memory_limit_mb}
-    };
 }
 
 judge::JudgeTestCase test_case_from_json(long long problem_id, const nlohmann::json& body) {
@@ -88,28 +57,7 @@ judge::JudgeTestCase test_case_from_json(long long problem_id, const nlohmann::j
     return test_case;
 }
 
-nlohmann::json result_json(const judge::SubmissionResult& result) {
-    return {
-        {"id", result.id},
-        {"submissionId", result.submission_id},
-        {"testCaseId", result.test_case_id},
-        {"orderIndex", result.order_index},
-        {"status", result.status},
-        {"verdict", result.verdict},
-        {"timeMs", result.time_ms},
-        {"memoryKb", result.memory_kb},
-        {"exitCode", result.exit_code},
-        {"stdoutSample", result.stdout_sample},
-        {"stderrSample", result.stderr_sample},
-        {"message", result.message}
-    };
-}
-
 nlohmann::json submission_json(const judge::Submission& submission, bool include_source) {
-    nlohmann::json results = nlohmann::json::array();
-    for (const auto& result : submission.results) {
-        results.push_back(result_json(result));
-    }
     auto body = nlohmann::json{
         {"id", submission.id},
         {"problemId", submission.problem_id},
@@ -126,7 +74,7 @@ nlohmann::json submission_json(const judge::Submission& submission, bool include
         {"submittedAt", submission.submitted_at},
         {"startedAt", submission.started_at},
         {"finishedAt", submission.finished_at},
-        {"results", results}
+        {"results", submission.results}
     };
     if (include_source) {
         body["sourceCode"] = submission.source_code;
@@ -255,12 +203,12 @@ RouteRegistration judgeRoutesRegistration([](App& app, ConnectionPool& connectio
                 if (!config) {
                     return api::json_response(404, {{"error", "judge config not found"}});
                 }
-                return api::json_response(200, {{"config", config_json(*config)}});
+                return api::json_response(200, {{"config", *config}});
             }
 
             const auto body = nlohmann::json::parse(req.body);
             const auto config = repository.upsertConfig(config_from_json(problem_id, body));
-            return api::json_response(200, {{"config", config_json(config)}});
+            return api::json_response(200, {{"config", config}});
         } catch (const auth::Unauthorized& error) {
             return api::json_response(401, {{"error", error.what()}});
         } catch (const auth::Forbidden& error) {
@@ -277,11 +225,10 @@ RouteRegistration judgeRoutesRegistration([](App& app, ConnectionPool& connectio
             auth::requireAdmin(connection_pool, req);
             judge::JudgeRepository repository{connection_pool};
             if (req.method == crow::HTTPMethod::Get) {
-                nlohmann::json items = nlohmann::json::array();
-                for (const auto& test_case : repository.listTestCases(problem_id, true)) {
-                    items.push_back(test_case_json(test_case));
-                }
-                return api::json_response(200, {{"items", items}});
+                return api::json_response(
+                    200,
+                    {{"items", repository.listTestCases(problem_id, true)}}
+                );
             }
 
             const auto body = nlohmann::json::parse(req.body);
@@ -313,7 +260,7 @@ RouteRegistration judgeRoutesRegistration([](App& app, ConnectionPool& connectio
             if (!updated) {
                 return api::json_response(404, {{"error", "judge test case not found"}});
             }
-            return api::json_response(200, {{"testCase", test_case_json(*updated)}});
+            return api::json_response(200, {{"testCase", *updated}});
         } catch (const auth::Unauthorized& error) {
             return api::json_response(401, {{"error", error.what()}});
         } catch (const auth::Forbidden& error) {

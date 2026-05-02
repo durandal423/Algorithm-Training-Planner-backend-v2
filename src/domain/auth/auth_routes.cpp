@@ -12,17 +12,6 @@
 
 namespace {
 
-nlohmann::json user_json(const auth::PublicUser& user) {
-    return {
-        {"id", user.id},
-        {"username", user.username},
-        {"email", user.email},
-        {"displayName", user.display_name},
-        {"role", user.role},
-        {"status", user.status}
-    };
-}
-
 RouteRegistration authRoutesRegistration([](App& app, ConnectionPool& connection_pool) {
     CROW_ROUTE(app, "/api/auth/register")
     .methods(crow::HTTPMethod::Post)
@@ -38,7 +27,7 @@ RouteRegistration authRoutesRegistration([](App& app, ConnectionPool& connection
                 api::required_string(body, "password")
             );
             return api::json_response(201, {
-                {"user", user_json(result.user)},
+                {"user", result.user},
                 {"token", result.token},
                 {"expiresAt", result.expires_at}
             });
@@ -65,7 +54,7 @@ RouteRegistration authRoutesRegistration([](App& app, ConnectionPool& connection
                     : std::optional<std::string>{req.remote_ip_address}
             );
             return api::json_response(200, {
-                {"user", user_json(result.user)},
+                {"user", result.user},
                 {"token", result.token},
                 {"expiresAt", result.expires_at}
             });
@@ -81,7 +70,7 @@ RouteRegistration authRoutesRegistration([](App& app, ConnectionPool& connection
     ([&connection_pool](const crow::request& req) -> crow::response {
         try {
             const auto user = auth::requireUser(connection_pool, req);
-            return api::json_response(200, {{"user", user_json(user)}});
+            return api::json_response(200, {{"user", user}});
         } catch (const auth::Unauthorized& error) {
             return api::json_response(401, {{"error", error.what()}});
         }
