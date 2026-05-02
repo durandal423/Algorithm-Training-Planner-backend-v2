@@ -44,7 +44,7 @@ constexpr std::array kMigrations{
     MigrationScript{
         1,
         "001_schema.sql",
-        "create base schema"
+        "create core auth and problem schema"
     },
     MigrationScript{
         2,
@@ -54,12 +54,7 @@ constexpr std::array kMigrations{
     MigrationScript{
         3,
         "003_oj_schema.sql",
-        "create oj platform schema"
-    },
-    MigrationScript{
-        4,
-        "004_seed_problem_catalog.sql",
-        "seed problem catalog and tags"
+        "create judge training and admin schema"
     }
 };
 

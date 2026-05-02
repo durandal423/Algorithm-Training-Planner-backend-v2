@@ -5,8 +5,10 @@
 ## 已完成
 
 - 数据库迁移：
-  - `sql/003_oj_schema.sql` 创建 OJ 核心表。
-  - `src/db/schema.cpp` 维护 version `1, 2, 3, 4`，并跳过空白 SQL 文件。
+  - `sql/001_schema.sql` 创建认证、会话、题库和标签核心表。
+  - `sql/003_oj_schema.sql` 创建判题、训练计划和审计表。
+  - `sql/002_seed.sql` 维护题库和标签种子。
+  - `src/db/schema.cpp` 维护当前迁移 version `1, 2, 3`。
   - 全新库启动时会自动检查数据库、执行迁移、验证必需表存在。
 - 认证与用户：
   - 注册、登录、当前用户、登出 API 已实现。
@@ -116,7 +118,7 @@
 ## 当前数据注意事项
 
 - 本地数据库 `algorithm_training_planner_v2` 已记录 `schema_migrations` version `1, 2, 3, 4`。
-- Version `4` 迁移 `sql/004_seed_problem_catalog.sql` 用于给已有库补齐题库和标签种子。
+- Version `4` 曾用于重复题库种子迁移，文件已删除；后续新增迁移不要复用 version `4`。
 - 压测脚本会在题库中保留或更新 P12134 / P12135 的 `codex-load-*` 测试点。
 - 最近一次真实压测提交保留在数据库中，便于复查判题记录。
 - `.gitignore` 有用户已有修改，不应随意回退。

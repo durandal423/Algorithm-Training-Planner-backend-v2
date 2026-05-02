@@ -1,120 +1,3 @@
-CREATE OR REPLACE FUNCTION set_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = now();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TABLE IF NOT EXISTS users (
-    id BIGSERIAL PRIMARY KEY,
-    username VARCHAR(64) NOT NULL UNIQUE,
-    email VARCHAR(255) UNIQUE,
-    display_name VARCHAR(64) NOT NULL,
-    password_hash TEXT NOT NULL,
-    role VARCHAR(16) NOT NULL DEFAULT 'user',
-    status VARCHAR(16) NOT NULL DEFAULT 'active',
-    last_login_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT chk_users_role CHECK (role IN ('user', 'admin')),
-    CONSTRAINT chk_users_status CHECK (status IN ('active', 'disabled'))
-);
-
-CREATE TABLE IF NOT EXISTS user_sessions (
-    id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    token_hash VARCHAR(128) NOT NULL UNIQUE,
-    user_agent TEXT,
-    ip_address INET,
-    expires_at TIMESTAMPTZ NOT NULL,
-    revoked_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS problems (
-    id BIGSERIAL PRIMARY KEY,
-    code VARCHAR(64) NOT NULL UNIQUE,
-    title VARCHAR(255) NOT NULL,
-    source_platform VARCHAR(64) NOT NULL DEFAULT 'local',
-    source_url TEXT,
-    difficulty INTEGER NOT NULL,
-    estimated_minutes INTEGER NOT NULL DEFAULT 30,
-    description TEXT,
-    input_format TEXT,
-    output_format TEXT,
-    sample_input TEXT,
-    sample_output TEXT,
-    hint TEXT,
-    visibility VARCHAR(16) NOT NULL DEFAULT 'public',
-    created_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT chk_problems_visibility CHECK (visibility IN ('public', 'hidden')),
-    CONSTRAINT chk_problems_difficulty CHECK (difficulty >= 0),
-    CONSTRAINT chk_problems_estimated_minutes CHECK (estimated_minutes > 0)
-);
-
-CREATE TABLE IF NOT EXISTS tags (
-    id BIGSERIAL PRIMARY KEY,
-    name VARCHAR(64) NOT NULL UNIQUE,
-    description TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS problem_tags (
-    problem_id BIGINT NOT NULL REFERENCES problems(id) ON DELETE CASCADE,
-    tag_id BIGINT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
-    PRIMARY KEY (problem_id, tag_id)
-);
-
-CREATE TABLE IF NOT EXISTS training_goals (
-    id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    name VARCHAR(128) NOT NULL,
-    target_count INTEGER NOT NULL,
-    time_budget_minutes INTEGER NOT NULL,
-    difficulty_min INTEGER,
-    difficulty_max INTEGER,
-    prefer_wrong_problems BOOLEAN NOT NULL DEFAULT TRUE,
-    prefer_weak_tags BOOLEAN NOT NULL DEFAULT TRUE,
-    difficulty_weight INTEGER NOT NULL DEFAULT 10,
-    tag_coverage_weight INTEGER NOT NULL DEFAULT 20,
-    wrong_problem_weight INTEGER NOT NULL DEFAULT 15,
-    weak_tag_weight INTEGER NOT NULL DEFAULT 15,
-    estimated_time_weight INTEGER NOT NULL DEFAULT 1,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT chk_training_goals_target_count CHECK (target_count > 0),
-    CONSTRAINT chk_training_goals_time_budget CHECK (time_budget_minutes > 0),
-    CONSTRAINT chk_training_goals_difficulty_range CHECK (
-        difficulty_min IS NULL OR difficulty_max IS NULL OR difficulty_min <= difficulty_max
-    )
-);
-
-CREATE TABLE IF NOT EXISTS training_goal_tags (
-    goal_id BIGINT NOT NULL REFERENCES training_goals(id) ON DELETE CASCADE,
-    tag_id BIGINT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
-    PRIMARY KEY (goal_id, tag_id)
-);
-
-CREATE TABLE IF NOT EXISTS training_plans (
-    id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    goal_id BIGINT REFERENCES training_goals(id) ON DELETE SET NULL,
-    name VARCHAR(128) NOT NULL,
-    status VARCHAR(16) NOT NULL DEFAULT 'draft',
-    candidate_count INTEGER NOT NULL DEFAULT 0,
-    selected_count INTEGER NOT NULL DEFAULT 0,
-    total_estimated_minutes INTEGER NOT NULL DEFAULT 0,
-    algorithm_summary TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT chk_training_plans_status CHECK (status IN ('draft', 'active', 'completed', 'archived')),
-    CONSTRAINT chk_training_plans_counts CHECK (
-        candidate_count >= 0 AND selected_count >= 0 AND total_estimated_minutes >= 0
-    )
-);
-
 CREATE TABLE IF NOT EXISTS judge_configs (
     id BIGSERIAL PRIMARY KEY,
     problem_id BIGINT NOT NULL UNIQUE REFERENCES problems(id) ON DELETE CASCADE,
@@ -188,6 +71,72 @@ CREATE TABLE IF NOT EXISTS submissions (
     CONSTRAINT chk_submissions_attempt_count CHECK (attempt_count >= 0)
 );
 
+CREATE TABLE IF NOT EXISTS submission_results (
+    id BIGSERIAL PRIMARY KEY,
+    submission_id BIGINT NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
+    test_case_id BIGINT REFERENCES judge_test_cases(id) ON DELETE SET NULL,
+    order_index INTEGER NOT NULL DEFAULT 0,
+    status VARCHAR(32) NOT NULL DEFAULT 'completed',
+    verdict VARCHAR(32),
+    time_ms INTEGER,
+    memory_kb INTEGER,
+    exit_code INTEGER,
+    stdout_sample TEXT,
+    stderr_sample TEXT,
+    message TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT chk_submission_results_status CHECK (status IN ('queued', 'judging', 'completed', 'failed')),
+    CONSTRAINT chk_submission_results_verdict CHECK (
+        verdict IS NULL OR verdict IN ('AC', 'WA', 'TLE', 'MLE', 'RE', 'CE', 'OLE', 'JE')
+    )
+);
+
+CREATE TABLE IF NOT EXISTS training_goals (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(128) NOT NULL,
+    target_count INTEGER NOT NULL,
+    time_budget_minutes INTEGER NOT NULL,
+    difficulty_min INTEGER,
+    difficulty_max INTEGER,
+    prefer_wrong_problems BOOLEAN NOT NULL DEFAULT TRUE,
+    prefer_weak_tags BOOLEAN NOT NULL DEFAULT TRUE,
+    difficulty_weight INTEGER NOT NULL DEFAULT 10,
+    tag_coverage_weight INTEGER NOT NULL DEFAULT 20,
+    wrong_problem_weight INTEGER NOT NULL DEFAULT 15,
+    weak_tag_weight INTEGER NOT NULL DEFAULT 15,
+    estimated_time_weight INTEGER NOT NULL DEFAULT 1,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT chk_training_goals_target_count CHECK (target_count > 0),
+    CONSTRAINT chk_training_goals_time_budget CHECK (time_budget_minutes > 0),
+    CONSTRAINT chk_training_goals_difficulty_range CHECK (
+        difficulty_min IS NULL OR difficulty_max IS NULL OR difficulty_min <= difficulty_max
+    )
+);
+
+CREATE TABLE IF NOT EXISTS training_goal_tags (
+    goal_id BIGINT NOT NULL REFERENCES training_goals(id) ON DELETE CASCADE,
+    tag_id BIGINT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+    PRIMARY KEY (goal_id, tag_id)
+);
+
+CREATE TABLE IF NOT EXISTS training_plans (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    goal_id BIGINT REFERENCES training_goals(id) ON DELETE SET NULL,
+    name VARCHAR(128) NOT NULL,
+    status VARCHAR(16) NOT NULL DEFAULT 'draft',
+    candidate_count INTEGER NOT NULL DEFAULT 0,
+    selected_count INTEGER NOT NULL DEFAULT 0,
+    total_estimated_minutes INTEGER NOT NULL DEFAULT 0,
+    algorithm_summary TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT chk_training_plans_status CHECK (status IN ('draft', 'active', 'completed', 'archived')),
+    CONSTRAINT chk_training_plans_counts CHECK (
+        candidate_count >= 0 AND selected_count >= 0 AND total_estimated_minutes >= 0
+    )
+);
+
 CREATE TABLE IF NOT EXISTS training_plan_items (
     id BIGSERIAL PRIMARY KEY,
     plan_id BIGINT NOT NULL REFERENCES training_plans(id) ON DELETE CASCADE,
@@ -225,26 +174,6 @@ CREATE TABLE IF NOT EXISTS training_records (
     )
 );
 
-CREATE TABLE IF NOT EXISTS submission_results (
-    id BIGSERIAL PRIMARY KEY,
-    submission_id BIGINT NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
-    test_case_id BIGINT REFERENCES judge_test_cases(id) ON DELETE SET NULL,
-    order_index INTEGER NOT NULL DEFAULT 0,
-    status VARCHAR(32) NOT NULL DEFAULT 'completed',
-    verdict VARCHAR(32),
-    time_ms INTEGER,
-    memory_kb INTEGER,
-    exit_code INTEGER,
-    stdout_sample TEXT,
-    stderr_sample TEXT,
-    message TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT chk_submission_results_status CHECK (status IN ('queued', 'judging', 'completed', 'failed')),
-    CONSTRAINT chk_submission_results_verdict CHECK (
-        verdict IS NULL OR verdict IN ('AC', 'WA', 'TLE', 'MLE', 'RE', 'CE', 'OLE', 'JE')
-    )
-);
-
 CREATE TABLE IF NOT EXISTS audit_logs (
     id BIGSERIAL PRIMARY KEY,
     actor_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
@@ -255,16 +184,12 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower ON users (lower(username));
-CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower ON users (lower(email)) WHERE email IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_user_sessions_user_expires ON user_sessions(user_id, expires_at);
-CREATE INDEX IF NOT EXISTS idx_user_sessions_active ON user_sessions(expires_at)
-WHERE revoked_at IS NULL;
-
-CREATE INDEX IF NOT EXISTS idx_problems_difficulty ON problems(difficulty);
-CREATE INDEX IF NOT EXISTS idx_problems_platform ON problems(source_platform);
-CREATE INDEX IF NOT EXISTS idx_problems_visibility ON problems(visibility);
-CREATE INDEX IF NOT EXISTS idx_problem_tags_tag_id ON problem_tags(tag_id);
+CREATE INDEX IF NOT EXISTS idx_judge_test_cases_problem_order ON judge_test_cases(problem_id, order_index);
+CREATE INDEX IF NOT EXISTS idx_submissions_problem_finished ON submissions(problem_id, finished_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_submissions_user_submitted ON submissions(user_id, submitted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_submissions_queue ON submissions(status, submitted_at, id)
+WHERE status = 'queued';
+CREATE INDEX IF NOT EXISTS idx_submission_results_submission ON submission_results(submission_id, order_index);
 
 CREATE INDEX IF NOT EXISTS idx_training_goals_user ON training_goals(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_training_plans_user ON training_plans(user_id, created_at DESC);
@@ -273,26 +198,8 @@ CREATE INDEX IF NOT EXISTS idx_training_plan_items_problem ON training_plan_item
 CREATE INDEX IF NOT EXISTS idx_training_records_user_practiced ON training_records(user_id, practiced_at DESC);
 CREATE INDEX IF NOT EXISTS idx_training_records_problem ON training_records(problem_id);
 
-CREATE INDEX IF NOT EXISTS idx_judge_test_cases_problem_order ON judge_test_cases(problem_id, order_index);
-CREATE INDEX IF NOT EXISTS idx_submissions_problem_finished ON submissions(problem_id, finished_at DESC, id DESC);
-CREATE INDEX IF NOT EXISTS idx_submissions_user_submitted ON submissions(user_id, submitted_at DESC);
-CREATE INDEX IF NOT EXISTS idx_submissions_queue ON submissions(status, submitted_at, id)
-WHERE status = 'queued';
-CREATE INDEX IF NOT EXISTS idx_submission_results_submission ON submission_results(submission_id, order_index);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_actor_created ON audit_logs(actor_user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_target ON audit_logs(target_type, target_id);
-
-DROP TRIGGER IF EXISTS trg_users_updated_at ON users;
-CREATE TRIGGER trg_users_updated_at
-BEFORE UPDATE ON users
-FOR EACH ROW
-EXECUTE FUNCTION set_updated_at();
-
-DROP TRIGGER IF EXISTS trg_problems_updated_at ON problems;
-CREATE TRIGGER trg_problems_updated_at
-BEFORE UPDATE ON problems
-FOR EACH ROW
-EXECUTE FUNCTION set_updated_at();
 
 DROP TRIGGER IF EXISTS trg_judge_configs_updated_at ON judge_configs;
 CREATE TRIGGER trg_judge_configs_updated_at
