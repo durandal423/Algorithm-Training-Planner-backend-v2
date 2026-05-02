@@ -120,6 +120,8 @@ Authorization: Bearer <token>
 
 ### Problem
 
+题目详情使用完整 `Problem`。题目列表使用下面的 `ProblemSummary`，不会返回正文、输入输出格式、样例和提示等大文本字段。
+
 ```json
 {
   "id": 1,
@@ -149,9 +151,60 @@ Authorization: Bearer <token>
 }
 ```
 
+### ProblemSummary
+
+`GET /api/problems` 的列表项。
+
+```json
+{
+  "id": 1,
+  "code": "P12134",
+  "title": "画展布置",
+  "sourcePlatform": "local",
+  "sourceUrl": "https://example.com/problem/P12134",
+  "difficulty": 1300,
+  "estimatedMinutes": 25,
+  "visibility": "public",
+  "createdBy": 1,
+  "createdAt": "2026-05-01 13:00:00+00",
+  "updatedAt": "2026-05-01 13:00:00+00",
+  "tags": [
+    {
+      "id": 1,
+      "name": "滑动窗口",
+      "description": ""
+    }
+  ]
+}
+```
+
+### SubmissionSummary
+
+`GET /api/submissions` 和 `GET /api/admin/submissions` 的列表项。不返回 `sourceCode`，也不返回 `results`。
+
+```json
+{
+  "id": 100,
+  "problemId": 1,
+  "userId": 2,
+  "language": "cpp",
+  "status": "completed",
+  "verdict": "AC",
+  "score": 40,
+  "compileStdout": "",
+  "compileStderr": "",
+  "compileTimeMs": 435,
+  "maxTimeMs": 20,
+  "maxMemoryKb": 0,
+  "submittedAt": "2026-05-01 13:00:00+00",
+  "startedAt": "2026-05-01 13:00:01+00",
+  "finishedAt": "2026-05-01 13:00:02+00"
+}
+```
+
 ### Submission
 
-列表接口不返回 `sourceCode`，详情接口返回 `sourceCode` 和 `results`。
+提交详情使用完整 `Submission`，包含 `sourceCode` 和 `results`。
 
 ```json
 {
@@ -397,9 +450,32 @@ GET /api/problems?q=P12134&tag=滑动窗口&limit=20&offset=0
 
 ```json
 {
-  "items": []
+  "items": [
+    {
+      "id": 1,
+      "code": "P12134",
+      "title": "画展布置",
+      "sourcePlatform": "local",
+      "sourceUrl": "https://example.com/problem/P12134",
+      "difficulty": 1300,
+      "estimatedMinutes": 25,
+      "visibility": "public",
+      "createdBy": 1,
+      "createdAt": "2026-05-01 13:00:00+00",
+      "updatedAt": "2026-05-01 13:00:00+00",
+      "tags": [
+        {
+          "id": 1,
+          "name": "滑动窗口",
+          "description": ""
+        }
+      ]
+    }
+  ]
 }
 ```
+
+说明：列表项为 `ProblemSummary`，不包含 `description`、`inputFormat`、`outputFormat`、`sampleInput`、`sampleOutput`、`hint`。
 
 ### 题目详情
 
@@ -411,7 +487,32 @@ GET /api/problems?q=P12134&tag=滑动窗口&limit=20&offset=0
 
 ```json
 {
-  "problem": {}
+  "problem": {
+    "id": 1,
+    "code": "P12134",
+    "title": "画展布置",
+    "sourcePlatform": "local",
+    "sourceUrl": "https://example.com/problem/P12134",
+    "difficulty": 1300,
+    "estimatedMinutes": 25,
+    "description": "",
+    "inputFormat": "",
+    "outputFormat": "",
+    "sampleInput": "4 2\n1 5 2 4\n",
+    "sampleOutput": "3\n",
+    "hint": "",
+    "visibility": "public",
+    "createdBy": 1,
+    "createdAt": "2026-05-01 13:00:00+00",
+    "updatedAt": "2026-05-01 13:00:00+00",
+    "tags": [
+      {
+        "id": 1,
+        "name": "滑动窗口",
+        "description": ""
+      }
+    ]
+  }
 }
 ```
 
@@ -520,9 +621,29 @@ GET /api/problems?q=P12134&tag=滑动窗口&limit=20&offset=0
 
 ```json
 {
-  "items": []
+  "items": [
+    {
+      "id": 100,
+      "problemId": 1,
+      "userId": 2,
+      "language": "cpp",
+      "status": "completed",
+      "verdict": "AC",
+      "score": 40,
+      "compileStdout": "",
+      "compileStderr": "",
+      "compileTimeMs": 435,
+      "maxTimeMs": 20,
+      "maxMemoryKb": 0,
+      "submittedAt": "2026-05-01 13:00:00+00",
+      "startedAt": "2026-05-01 13:00:01+00",
+      "finishedAt": "2026-05-01 13:00:02+00"
+    }
+  ]
 }
 ```
+
+说明：列表项为 `SubmissionSummary`，不包含 `sourceCode` 和 `results`。
 
 ### 提交代码
 
@@ -565,7 +686,25 @@ GET /api/problems?q=P12134&tag=滑动窗口&limit=20&offset=0
 
 ```json
 {
-  "submission": {}
+  "submission": {
+    "id": 100,
+    "problemId": 1,
+    "userId": 2,
+    "language": "cpp",
+    "status": "completed",
+    "verdict": "AC",
+    "score": 40,
+    "compileStdout": "",
+    "compileStderr": "",
+    "compileTimeMs": 435,
+    "maxTimeMs": 20,
+    "maxMemoryKb": 0,
+    "submittedAt": "2026-05-01 13:00:00+00",
+    "startedAt": "2026-05-01 13:00:01+00",
+    "finishedAt": "2026-05-01 13:00:02+00",
+    "sourceCode": "#include <iostream>\nint main(){return 0;}\n",
+    "results": []
+  }
 }
 ```
 
@@ -588,9 +727,29 @@ GET /api/problems?q=P12134&tag=滑动窗口&limit=20&offset=0
 
 ```json
 {
-  "items": []
+  "items": [
+    {
+      "id": 100,
+      "problemId": 1,
+      "userId": 2,
+      "language": "cpp",
+      "status": "completed",
+      "verdict": "AC",
+      "score": 40,
+      "compileStdout": "",
+      "compileStderr": "",
+      "compileTimeMs": 435,
+      "maxTimeMs": 20,
+      "maxMemoryKb": 0,
+      "submittedAt": "2026-05-01 13:00:00+00",
+      "startedAt": "2026-05-01 13:00:01+00",
+      "finishedAt": "2026-05-01 13:00:02+00"
+    }
+  ]
 }
 ```
+
+说明：列表项为 `SubmissionSummary`，不包含 `sourceCode` 和 `results`。
 
 ### 重新判题
 

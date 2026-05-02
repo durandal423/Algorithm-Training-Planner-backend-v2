@@ -13,7 +13,7 @@ class ProblemRepository final {
 public:
     explicit ProblemRepository(ConnectionPool& pool);
 
-    std::vector<Problem> listProblems(const ProblemFilter& filter) const;
+    std::vector<ProblemSummary> listProblems(const ProblemFilter& filter) const;
     std::optional<Problem> getProblem(long long id, bool include_hidden) const;
     long long createProblem(const Problem& problem, const std::vector<std::string>& tag_names) const;
     bool updateProblem(long long id, const Problem& problem, const std::vector<std::string>& tag_names) const;
@@ -30,6 +30,10 @@ private:
         const std::vector<std::string>& names
     ) const;
     std::vector<Tag> loadTags(pqxx::transaction_base& tx, long long problem_id) const;
+    void loadTagsForProblems(
+        pqxx::transaction_base& tx,
+        std::vector<ProblemSummary>& problems
+    ) const;
 };
 
 } // namespace problem

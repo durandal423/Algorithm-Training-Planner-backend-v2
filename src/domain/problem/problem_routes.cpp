@@ -10,10 +10,6 @@
 
 namespace {
 
-std::vector<std::string> tag_names_from_json(const nlohmann::json& body) {
-    return api::string_array(body, "tags");
-}
-
 problem::Problem problem_from_json(
     const nlohmann::json& body,
     std::optional<long long> created_by = std::nullopt
@@ -91,7 +87,7 @@ RouteRegistration problemRoutesRegistration([](App& app, ConnectionPool& connect
             problem::ProblemRepository repository{connection_pool};
             const auto id = repository.createProblem(
                 problem_from_json(body, admin.id),
-                tag_names_from_json(body)
+                api::string_array(body, "tags")
             );
             return api::json_response(201, {{"id", id}});
         } catch (const auth::Unauthorized& error) {
@@ -118,7 +114,7 @@ RouteRegistration problemRoutesRegistration([](App& app, ConnectionPool& connect
             const bool updated = repository.updateProblem(
                 id,
                 problem_from_json(body),
-                tag_names_from_json(body)
+                api::string_array(body, "tags")
             );
             return updated
                 ? api::json_response(200, {{"updated", true}})

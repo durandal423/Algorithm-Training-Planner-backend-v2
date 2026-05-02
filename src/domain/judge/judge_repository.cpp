@@ -87,6 +87,26 @@ Submission submission_from_row(const pqxx::row& row) {
     return submission;
 }
 
+Submission submission_summary_from_row(const pqxx::row& row) {
+    Submission submission;
+    submission.id = row["id"].as<long long>();
+    submission.problem_id = row["problem_id"].as<long long>();
+    submission.user_id = optional_long(row["user_id"]);
+    submission.language = row["language"].as<std::string>();
+    submission.status = row["status"].as<std::string>();
+    submission.verdict = optional_string(row["verdict"]);
+    submission.score = row["score"].as<int>();
+    submission.compile_stdout = string_or_empty(row["compile_stdout"]);
+    submission.compile_stderr = string_or_empty(row["compile_stderr"]);
+    submission.compile_time_ms = optional_int(row["compile_time_ms"]);
+    submission.max_time_ms = optional_int(row["max_time_ms"]);
+    submission.max_memory_kb = optional_int(row["max_memory_kb"]);
+    submission.submitted_at = string_or_empty(row["submitted_at"]);
+    submission.started_at = optional_string(row["started_at"]);
+    submission.finished_at = optional_string(row["finished_at"]);
+    return submission;
+}
+
 SubmissionResult result_from_row(const pqxx::row& row) {
     SubmissionResult result;
     result.id = row["id"].as<long long>();
@@ -106,6 +126,13 @@ SubmissionResult result_from_row(const pqxx::row& row) {
 
 constexpr auto kSubmissionSelect = R"SQL(
     SELECT id, problem_id, user_id, language, source_code, status, verdict, score,
+           compile_stdout, compile_stderr, compile_time_ms, max_time_ms, max_memory_kb,
+           submitted_at, started_at, finished_at
+    FROM submissions
+)SQL";
+
+constexpr auto kSubmissionSummarySelect = R"SQL(
+    SELECT id, problem_id, user_id, language, status, verdict, score,
            compile_stdout, compile_stderr, compile_time_ms, max_time_ms, max_memory_kb,
            submitted_at, started_at, finished_at
     FROM submissions
@@ -345,7 +372,7 @@ std::vector<Submission> JudgeRepository::listSubmissions(const SubmissionFilter&
     const int limit = std::clamp(filter.limit, 1, 200);
     const int offset = std::max(0, filter.offset);
     const auto rows = tx.exec(
-        std::string{kSubmissionSelect} + R"SQL(
+        std::string{kSubmissionSummarySelect} + R"SQL(
             WHERE ($1::bigint IS NULL OR problem_id = $1)
               AND ($2::bigint IS NULL OR user_id = $2)
               AND ($3 = '' OR status = $3)
@@ -363,7 +390,7 @@ std::vector<Submission> JudgeRepository::listSubmissions(const SubmissionFilter&
         }
     );
     for (const auto& row : rows) {
-        submissions.push_back(submission_from_row(row));
+        submissions.push_back(submission_summary_from_row(row));
     }
     tx.commit();
     return submissions;

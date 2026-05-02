@@ -73,11 +73,11 @@ nlohmann::json submission_json(const judge::Submission& submission, bool include
         {"maxMemoryKb", submission.max_memory_kb},
         {"submittedAt", submission.submitted_at},
         {"startedAt", submission.started_at},
-        {"finishedAt", submission.finished_at},
-        {"results", submission.results}
+        {"finishedAt", submission.finished_at}
     };
     if (include_source) {
         body["sourceCode"] = submission.source_code;
+        body["results"] = submission.results;
     }
     return body;
 }

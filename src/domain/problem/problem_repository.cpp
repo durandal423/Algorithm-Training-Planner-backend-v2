@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <unordered_map>
 
 namespace problem {
 namespace {
@@ -59,6 +60,24 @@ Problem problem_from_row(const pqxx::row& row) {
     return problem;
 }
 
+ProblemSummary problem_summary_from_row(const pqxx::row& row) {
+    ProblemSummary problem;
+    problem.id = row["id"].as<long long>();
+    problem.code = row["code"].as<std::string>();
+    problem.title = row["title"].as<std::string>();
+    problem.source_platform = row["source_platform"].as<std::string>();
+    problem.source_url = optional_string(row["source_url"]);
+    problem.difficulty = row["difficulty"].as<int>();
+    problem.estimated_minutes = row["estimated_minutes"].as<int>();
+    problem.visibility = row["visibility"].as<std::string>();
+    if (!row["created_by"].is_null()) {
+        problem.created_by = row["created_by"].as<long long>();
+    }
+    problem.created_at = string_or_empty(row["created_at"]);
+    problem.updated_at = string_or_empty(row["updated_at"]);
+    return problem;
+}
+
 Tag tag_from_row(const pqxx::row& row) {
     Tag tag;
     tag.id = row["id"].as<long long>();
@@ -74,20 +93,26 @@ constexpr auto kProblemSelect = R"SQL(
     FROM problems
 )SQL";
 
+constexpr auto kProblemSummarySelect = R"SQL(
+    SELECT id, code, title, source_platform, source_url, difficulty, estimated_minutes,
+           visibility, created_by, created_at, updated_at
+    FROM problems
+)SQL";
+
 } // namespace
 
 ProblemRepository::ProblemRepository(ConnectionPool& pool)
     : pool_(pool) {}
 
-std::vector<Problem> ProblemRepository::listProblems(const ProblemFilter& filter) const {
+std::vector<ProblemSummary> ProblemRepository::listProblems(const ProblemFilter& filter) const {
     auto lease = pool_.acquire();
     pqxx::work tx{lease.connection()};
-    std::vector<Problem> problems;
+    std::vector<ProblemSummary> problems;
 
     const int limit = std::clamp(filter.limit, 1, 200);
     const int offset = std::max(0, filter.offset);
     const auto rows = tx.exec(
-        std::string{kProblemSelect} + R"SQL(
+        std::string{kProblemSummarySelect} + R"SQL(
             WHERE ($1 OR visibility = 'public')
               AND ($2 = '' OR code ILIKE '%' || $2 || '%' OR title ILIKE '%' || $2 || '%')
               AND ($3 = '' OR EXISTS (
@@ -111,11 +136,11 @@ std::vector<Problem> ProblemRepository::listProblems(const ProblemFilter& filter
             offset
         }
     );
+    problems.reserve(rows.size());
     for (const auto& row : rows) {
-        auto item = problem_from_row(row);
-        item.tags = loadTags(tx, item.id);
-        problems.push_back(std::move(item));
+        problems.push_back(problem_summary_from_row(row));
     }
+    loadTagsForProblems(tx, problems);
     tx.commit();
     return problems;
 }
@@ -311,6 +336,52 @@ std::vector<Tag> ProblemRepository::loadTags(pqxx::transaction_base& tx, long lo
         tags.push_back(tag_from_row(row));
     }
     return tags;
+}
+
+void ProblemRepository::loadTagsForProblems(
+    pqxx::transaction_base& tx,
+    std::vector<ProblemSummary>& problems
+) const {
+    if (problems.empty()) {
+        return;
+    }
+
+    std::unordered_map<long long, ProblemSummary*> problems_by_id;
+    problems_by_id.reserve(problems.size());
+    pqxx::params params;
+    params.reserve(problems.size());
+    pqxx::placeholders placeholder;
+    std::string placeholders;
+    for (auto& problem : problems) {
+        problems_by_id.emplace(problem.id, &problem);
+        params.append(problem.id);
+        if (!placeholders.empty()) {
+            placeholders += ", ";
+        }
+        placeholders += placeholder.get();
+        placeholder.next();
+    }
+
+    const auto rows = tx.exec(
+        R"SQL(
+            SELECT pt.problem_id, t.id, t.name, t.description
+            FROM tags t
+            JOIN problem_tags pt ON pt.tag_id = t.id
+            WHERE pt.problem_id IN (
+        )SQL" + placeholders + R"SQL(
+            )
+            ORDER BY pt.problem_id, t.name
+        )SQL",
+        params
+    );
+    for (const auto& row : rows) {
+        const auto problem_id = row["problem_id"].as<long long>();
+        const auto found = problems_by_id.find(problem_id);
+        if (found == problems_by_id.end()) {
+            continue;
+        }
+        found->second->tags.push_back(tag_from_row(row));
+    }
 }
 
 } // namespace problem
