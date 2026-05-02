@@ -6,6 +6,14 @@ USER_HOME="$(getent passwd "${USER_NAME}" | cut -d: -f6 || true)"
 if [ -z "${USER_HOME}" ]; then
   USER_HOME="/home/${USER_NAME}"
 fi
+
+alias cls=clear
+
+BASHRC_PATH="${USER_HOME}/.bashrc"
+touch "${BASHRC_PATH}"
+if ! grep -qxF "alias cls=clear" "${BASHRC_PATH}"; then
+  printf '\n%s\n' "alias cls=clear" >> "${BASHRC_PATH}"
+fi
 VCPKG_DOWNLOADS_DIR="${VCPKG_DOWNLOADS:-/usr/local/vcpkg-downloads}"
 VCPKG_BINARY_CACHE_DIR="${VCPKG_DEFAULT_BINARY_CACHE:-/var/cache/vcpkg}"
 SCCACHE_DIR_PATH="${SCCACHE_DIR:-/var/cache/sccache}"
