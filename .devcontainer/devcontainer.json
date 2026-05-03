@@ -7,7 +7,6 @@
       "HTTPS_PROXY": "${localEnv:HTTPS_PROXY}",
       "NO_PROXY": "${localEnv:NO_PROXY}",
       "USERNAME": "vscode",
-      "GCC_VERSION": "12",
       "CMAKE_VERSION": "3.31.11",
       "VCPKG_COMMIT": "80f9bcfa455e875d9c1bf7a7c6692d7e1e481061",
       "DOCKER_GID": "995",

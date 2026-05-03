@@ -1,10 +1,9 @@
-FROM mcr.microsoft.com/devcontainers/cpp:1-bookworm@sha256:7276064ebe6540274de9c8e29097a955724b21b1c7f2b087587b55a51f7a958b
+FROM mcr.microsoft.com/devcontainers/cpp:ubuntu-24.04
 
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
 ARG NO_PROXY
 ARG USERNAME=vscode
-ARG GCC_VERSION
 ARG CMAKE_VERSION
 ARG VCPKG_COMMIT
 ARG DOCKER_GID=995
@@ -50,8 +49,6 @@ RUN apt-get update \
         automake \
         libtool \
         m4 \
-        gcc-${GCC_VERSION} \
-        g++-${GCC_VERSION} \
         gnupg \
     && rm -rf /var/lib/apt/lists/*
 
@@ -80,9 +77,6 @@ RUN set -eux; \
     fi; \
     DOCKER_GROUP_NAME="$(getent group "${DOCKER_GID}" | cut -d: -f1)"; \
     usermod -aG "${DOCKER_GROUP_NAME}" "${USERNAME}"
-
-RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-${GCC_VERSION} 100 \
-    && update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-${GCC_VERSION} 100
 
 USER ${USERNAME}
 
