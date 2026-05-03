@@ -1,10 +1,13 @@
 #include "algorithms/training_plan_algorithms.hpp"
 
+#include "config.hpp"
+
 #include <algorithm>
 #include <bit>
 #include <cstdint>
 #include <limits>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -455,6 +458,11 @@ OptimizedTrainingPlan optimizeTrainingPlanByDP(
         static_cast<std::size_t>(budget + 1) *
         static_cast<std::size_t>(max_count + 1) *
         static_cast<std::size_t>(mask_count);
+    if (state_count > static_cast<std::size_t>(config::TRAINING_PLAN_MAX_DP_STATES)) {
+        throw std::runtime_error{
+            "training plan search space is too large; reduce targetCount, timeBudgetMinutes, or tags"
+        };
+    }
 
     std::vector<State> dp(state_count);
     dp[state_index(0, 0, 0, max_count, mask_count)].score = 0;

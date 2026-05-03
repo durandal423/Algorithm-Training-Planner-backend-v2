@@ -1019,14 +1019,44 @@ GET /api/problems?q=P12134&tag=滑动窗口&limit=20&offset=0
 - `name` 可选，默认 `<goal.name> plan`。
 - `status` 可选，默认 `draft`。
 
-响应 `201`：
+响应 `202`：
 
-算法说明：该接口保持 API 不变。后端先调用 `selectStableDifficultyWindow` 用双指针/滑动窗口从候选题中选出稳定难度区间，再调用 `optimizeTrainingPlanByDP` 在 `targetCount` 和 `timeBudgetMinutes` 约束下做 0/1 背包式动态规划选题。
+该接口会创建后台任务并立即返回，避免训练计划生成占用 Crow 工作线程。后台任务会先调用 `selectStableDifficultyWindow` 用双指针/滑动窗口从候选题中选出稳定难度区间，再调用 `optimizeTrainingPlanByDP` 在 `targetCount` 和 `timeBudgetMinutes` 约束下做 0/1 背包式动态规划选题。
 
 ```json
 {
-  "plan": {},
-  "items": []
+  "taskId": 1,
+  "task_id": 1,
+  "status": "pending"
+}
+```
+
+生成结果通过 `GET /api/tasks/<taskId>` 查询。
+
+### 查询后台任务
+
+`GET /api/tasks/<id>`
+
+权限：登录用户，只能查询自己的任务；管理员可查询所有任务。
+
+响应 `200`：
+
+```json
+{
+  "task": {
+    "id": 1,
+    "taskId": 1,
+    "type": "training.plan.generate",
+    "status": "succeeded",
+    "result": {
+      "plan": {},
+      "items": []
+    },
+    "error": null,
+    "createdAt": "2026-05-03 06:18:18.267515+00",
+    "startedAt": "2026-05-03 06:18:18.279451+00",
+    "finishedAt": "2026-05-03 06:18:18.342557+00"
+  }
 }
 ```
 

@@ -12,11 +12,12 @@
 
 namespace {
 
-RouteRegistration authRoutesRegistration([](App& app, ConnectionPool& connection_pool) {
+RouteRegistration authRoutesRegistration([](App& app, runtime::ApplicationContext& context) {
     CROW_ROUTE(app, "/api/auth/register")
     .methods(crow::HTTPMethod::Post)
-    ([&connection_pool](const crow::request& req) -> crow::response {
+    ([&context](const crow::request& req) -> crow::response {
         try {
+            auto& connection_pool = context.apiPool();
             const auto body = nlohmann::json::parse(req.body);
             auth::AuthRepository repository{connection_pool};
             auth::AuthService service{repository};
@@ -40,8 +41,9 @@ RouteRegistration authRoutesRegistration([](App& app, ConnectionPool& connection
 
     CROW_ROUTE(app, "/api/auth/login")
     .methods(crow::HTTPMethod::Post)
-    ([&connection_pool](const crow::request& req) -> crow::response {
+    ([&context](const crow::request& req) -> crow::response {
         try {
+            auto& connection_pool = context.apiPool();
             const auto body = nlohmann::json::parse(req.body);
             auth::AuthRepository repository{connection_pool};
             auth::AuthService service{repository};
@@ -67,8 +69,9 @@ RouteRegistration authRoutesRegistration([](App& app, ConnectionPool& connection
 
     CROW_ROUTE(app, "/api/auth/me")
     .methods(crow::HTTPMethod::Get)
-    ([&connection_pool](const crow::request& req) -> crow::response {
+    ([&context](const crow::request& req) -> crow::response {
         try {
+            auto& connection_pool = context.apiPool();
             const auto user = auth::requireUser(connection_pool, req);
             return api::json_response(200, {{"user", user}});
         } catch (const auth::Unauthorized& error) {
@@ -78,7 +81,8 @@ RouteRegistration authRoutesRegistration([](App& app, ConnectionPool& connection
 
     CROW_ROUTE(app, "/api/auth/logout")
     .methods(crow::HTTPMethod::Post)
-    ([&connection_pool](const crow::request& req) -> crow::response {
+    ([&context](const crow::request& req) -> crow::response {
+        auto& connection_pool = context.apiPool();
         auth::AuthRepository repository{connection_pool};
         auth::AuthService service{repository};
         const bool revoked = service.logout(auth::bearerToken(req));

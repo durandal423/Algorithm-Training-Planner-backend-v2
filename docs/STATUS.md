@@ -28,7 +28,7 @@
   - 管理员创建、更新、删除题目。
 - 判题系统：
   - 用户提交 C++ 代码进入 `submissions` 队列。
-  - 进程内 `JudgeDispatcher` 启动固定线程池。
+  - 独立 `try-crow-judge-worker` 进程内由 `JudgeDispatcher` 启动固定线程池。
   - Judge 线程使用 `FOR UPDATE SKIP LOCKED` 抢 `queued` submission，避免重复领取。
   - Docker 判题池使用 `atp-judge-sandbox-0..N` 命名。
   - 默认 Docker 镜像为 `gcc:13`。
@@ -40,7 +40,7 @@
   - 管理员可重判提交。
 - 训练计划 API：
   - 用户可维护训练目标 CRUD。
-  - 用户可根据训练目标生成训练计划。
+  - 用户可根据训练目标异步生成训练计划，接口返回 `taskId`，通过 `GET /api/tasks/<id>` 查询状态和结果。
   - 生成策略按标签、难度范围、可见性过滤。
   - 底层先用 `selectStableDifficultyWindow` 以双指针/滑动窗口选出稳定难度候选区间，再用 `optimizeTrainingPlanByDP` 在时间预算和目标题数约束下做动态规划选题。
   - 用户可查看训练计划列表、详情、计划项列表。
@@ -95,6 +95,7 @@
 - `PUT /api/training/goals/<id>`
 - `DELETE /api/training/goals/<id>`
 - `POST /api/training/plans/generate`
+- `GET /api/tasks/<id>`
 - `GET /api/training/plans`
 - `GET /api/training/plans/<id>`
 - `GET /api/training/plans/<id>/items`
@@ -106,7 +107,9 @@
 - `./build/try-crow-tests` 通过。
 - `RUN_DB_TESTS=1 ./build/try-crow-tests` 通过。
 - `ctest --test-dir build --output-on-failure` 通过。
-- `timeout 12s ./build/try-crow` 可启动到数据库迁移检查、管理员 bootstrap 检查、Docker judge pool 初始化、JudgeDispatcher 启动、Crow server 启动；`exit_code=124` 是 `timeout` 的预期结果。
+- `timeout 5s ./build/try-crow` 可启动到数据库迁移检查、管理员 bootstrap 检查、后台任务线程池初始化、Crow server 启动；`exit_code=124` 是 `timeout` 的预期结果。
+- `timeout 8s ./build/try-crow-judge-worker` 可启动到数据库迁移检查、Docker judge pool 初始化、JudgeDispatcher 启动；`exit_code=124` 是 `timeout` 的预期结果。
+- HTTP 冒烟验证通过：注册临时用户、创建训练目标、`POST /api/training/plans/generate` 返回 `202 taskId`、`GET /api/tasks/<id>` 返回 `succeeded` 和生成的 plan/items。
 - `tests/manual/run_judge_load_100.sh` 已完成真实判题压测：
   - 向 P12134 / P12135 写入 `codex-load-*` 测试点。
   - 提交 100 条 C++ 代码。
@@ -117,7 +120,7 @@
 
 ## 当前数据注意事项
 
-- 本地数据库 `algorithm_training_planner_v2` 已记录 `schema_migrations` version `1, 2, 3, 4`。
+- 本地数据库 `algorithm_training_planner_v2` 已记录 `schema_migrations` version `1, 2, 3, 4, 5`。
 - Version `4` 曾用于重复题库种子迁移，文件已删除；后续新增迁移不要复用 version `4`。
 - 压测脚本会在题库中保留或更新 P12134 / P12135 的 `codex-load-*` 测试点。
 - 最近一次真实压测提交保留在数据库中，便于复查判题记录。

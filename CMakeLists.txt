@@ -28,6 +28,16 @@ add_executable(${PROJECT_NAME}
     src/api/route_registry.cpp
     src/algorithms/training_plan_algorithms.cpp
     src/algorithms/training_plan_algorithms.hpp
+    src/concurrency/thread_pool.hpp
+    src/concurrency/thread_pool.cpp
+    src/domain/task/task_models.hpp
+    src/domain/task/task_repository.hpp
+    src/domain/task/task_repository.cpp
+    src/domain/task/task_scheduler.hpp
+    src/domain/task/task_scheduler.cpp
+    src/runtime/application_context.hpp
+    src/runtime/application_context.cpp
+    src/domain/task/task_routes.cpp
     src/logging/logging.hpp
     src/logging/logging.cpp
     src/db/connection_pool.cpp
@@ -54,19 +64,15 @@ add_executable(${PROJECT_NAME}
     src/domain/training/training_models.hpp
     src/domain/training/training_repository.cpp
     src/domain/training/training_repository.hpp
+    src/domain/training/training_service.cpp
+    src/domain/training/training_service.hpp
+    src/domain/training/training_plan_generation_service.cpp
+    src/domain/training/training_plan_generation_service.hpp
     src/domain/training/training_routes.cpp
-    src/domain/judge/judge_dispatcher.cpp
-    src/domain/judge/judge_dispatcher.hpp
     src/domain/judge/judge_models.hpp
     src/domain/judge/judge_repository.cpp
     src/domain/judge/judge_repository.hpp
     src/domain/judge/judge_routes.cpp
-    src/domain/judge/judge_service.cpp
-    src/domain/judge/judge_service.hpp
-    src/domain/judge/output_comparator.cpp
-    src/domain/judge/output_comparator.hpp
-    src/domain/judge/sandbox_runner.cpp
-    src/domain/judge/sandbox_runner.hpp
     src/domain/admin/admin_models.hpp
     src/domain/admin/admin_repository.cpp
     src/domain/admin/admin_repository.hpp
@@ -98,6 +104,44 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     spdlog::spdlog
 )
 
+add_executable(try-crow-judge-worker
+    src/judge_worker_main.cpp
+    src/logging/logging.hpp
+    src/logging/logging.cpp
+    src/db/connection_pool.cpp
+    src/db/connection_pool.hpp
+    src/db/schema.hpp
+    src/db/schema.cpp
+    src/db/database.cpp
+    src/db/database.hpp
+    src/domain/judge/judge_dispatcher.cpp
+    src/domain/judge/judge_dispatcher.hpp
+    src/domain/judge/judge_models.hpp
+    src/domain/judge/judge_repository.cpp
+    src/domain/judge/judge_repository.hpp
+    src/domain/judge/judge_service.cpp
+    src/domain/judge/judge_service.hpp
+    src/domain/judge/output_comparator.cpp
+    src/domain/judge/output_comparator.hpp
+    src/domain/judge/sandbox_runner.cpp
+    src/domain/judge/sandbox_runner.hpp
+)
+
+target_include_directories(try-crow-judge-worker PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_BINARY_DIR}
+)
+
+target_compile_features(try-crow-judge-worker PRIVATE
+    cxx_std_23
+)
+
+target_link_libraries(try-crow-judge-worker PRIVATE
+    libpqxx::pqxx
+    nlohmann_json::nlohmann_json
+    spdlog::spdlog
+)
+
 enable_testing()
 
 add_executable(try-crow-tests
@@ -106,6 +150,7 @@ add_executable(try-crow-tests
     tests/unit/training_plan_algorithms_test.cpp
     tests/db/auth_repository_test.cpp
     tests/db/judge_repository_queue_test.cpp
+    tests/db/task_repository_test.cpp
     src/algorithms/training_plan_algorithms.cpp
     src/algorithms/training_plan_algorithms.hpp
     src/db/connection_pool.cpp
@@ -125,6 +170,9 @@ add_executable(try-crow-tests
     src/domain/judge/output_comparator.cpp
     src/domain/judge/output_comparator.hpp
     src/domain/training/training_models.hpp
+    src/domain/task/task_models.hpp
+    src/domain/task/task_repository.cpp
+    src/domain/task/task_repository.hpp
 )
 
 target_include_directories(try-crow-tests PRIVATE

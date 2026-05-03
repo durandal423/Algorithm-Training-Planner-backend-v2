@@ -4,9 +4,9 @@ void RouteRegistry::add(RouteRegistrar registrar) {
     registrars_.push_back(registrar);
 }
 
-void RouteRegistry::apply(App &app, ConnectionPool &connection_pool) const {
+void RouteRegistry::apply(App& app, runtime::ApplicationContext& context) const {
     for (auto registrar : registrars_) {
-        registrar(app, connection_pool);
+        registrar(app, context);
     }
 }
 

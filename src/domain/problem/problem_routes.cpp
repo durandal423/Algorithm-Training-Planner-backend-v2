@@ -37,10 +37,11 @@ bool is_admin(ConnectionPool& pool, const crow::request& req) {
     return user && user->role == "admin";
 }
 
-RouteRegistration problemRoutesRegistration([](App& app, ConnectionPool& connection_pool) {
+RouteRegistration problemRoutesRegistration([](App& app, runtime::ApplicationContext& context) {
     CROW_ROUTE(app, "/api/problems")
     .methods(crow::HTTPMethod::Get)
-    ([&connection_pool](const crow::request& req) -> crow::response {
+    ([&context](const crow::request& req) -> crow::response {
+        auto& connection_pool = context.apiPool();
         problem::ProblemFilter filter;
         filter.include_hidden = is_admin(connection_pool, req);
         if (const char* q = req.url_params.get("q")) {
@@ -62,7 +63,8 @@ RouteRegistration problemRoutesRegistration([](App& app, ConnectionPool& connect
 
     CROW_ROUTE(app, "/api/problems/<int>")
     .methods(crow::HTTPMethod::Get)
-    ([&connection_pool](const crow::request& req, int id) -> crow::response {
+    ([&context](const crow::request& req, int id) -> crow::response {
+        auto& connection_pool = context.apiPool();
         problem::ProblemRepository repository{connection_pool};
         const auto item = repository.getProblem(id, is_admin(connection_pool, req));
         if (!item) {
@@ -73,15 +75,17 @@ RouteRegistration problemRoutesRegistration([](App& app, ConnectionPool& connect
 
     CROW_ROUTE(app, "/api/tags")
     .methods(crow::HTTPMethod::Get)
-    ([&connection_pool]() -> crow::response {
+    ([&context]() -> crow::response {
+        auto& connection_pool = context.apiPool();
         problem::ProblemRepository repository{connection_pool};
         return api::json_response(200, {{"items", repository.listTags()}});
     });
 
     CROW_ROUTE(app, "/api/admin/problems")
     .methods(crow::HTTPMethod::Post)
-    ([&connection_pool](const crow::request& req) -> crow::response {
+    ([&context](const crow::request& req) -> crow::response {
         try {
+            auto& connection_pool = context.apiPool();
             const auto admin = auth::requireAdmin(connection_pool, req);
             const auto body = nlohmann::json::parse(req.body);
             problem::ProblemRepository repository{connection_pool};
@@ -101,8 +105,9 @@ RouteRegistration problemRoutesRegistration([](App& app, ConnectionPool& connect
 
     CROW_ROUTE(app, "/api/admin/problems/<int>")
     .methods(crow::HTTPMethod::Put, crow::HTTPMethod::Delete)
-    ([&connection_pool](const crow::request& req, int id) -> crow::response {
+    ([&context](const crow::request& req, int id) -> crow::response {
         try {
+            auto& connection_pool = context.apiPool();
             auth::requireAdmin(connection_pool, req);
             problem::ProblemRepository repository{connection_pool};
             if (req.method == crow::HTTPMethod::Delete) {

@@ -27,6 +27,7 @@ constexpr std::array kRequiredTables{
     "training_plans",
     "training_plan_items",
     "training_records",
+    "background_tasks",
     "judge_configs",
     "judge_test_cases",
     "submissions",
@@ -55,6 +56,11 @@ constexpr std::array kMigrations{
         3,
         "003_oj_schema.sql",
         "create judge training and admin schema"
+    },
+    MigrationScript{
+        5,
+        "005_background_tasks.sql",
+        "create background task schema"
     }
 };
 

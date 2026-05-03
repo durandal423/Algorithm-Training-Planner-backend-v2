@@ -9,11 +9,12 @@
 
 namespace {
 
-RouteRegistration adminRoutesRegistration([](App& app, ConnectionPool& connection_pool) {
+RouteRegistration adminRoutesRegistration([](App& app, runtime::ApplicationContext& context) {
     CROW_ROUTE(app, "/api/admin/audit-logs")
     .methods(crow::HTTPMethod::Get)
-    ([&connection_pool](const crow::request& req) -> crow::response {
+    ([&context](const crow::request& req) -> crow::response {
         try {
+            auto& connection_pool = context.apiPool();
             auth::requireAdmin(connection_pool, req);
             int limit = 100;
             if (const auto value = api::optional_query_int(req, "limit")) {
