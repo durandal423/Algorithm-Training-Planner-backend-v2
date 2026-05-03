@@ -5,28 +5,28 @@
 namespace task {
 namespace {
 
-std::optional<long long> optional_long(const pqxx::field& field) {
+std::optional<long long> optional_long(const pqxx::field_ref field) {
     if (field.is_null()) {
         return std::nullopt;
     }
     return field.as<long long>();
 }
 
-std::optional<std::string> optional_string(const pqxx::field& field) {
+std::optional<std::string> optional_string(const pqxx::field_ref field) {
     if (field.is_null()) {
         return std::nullopt;
     }
     return field.as<std::string>();
 }
 
-nlohmann::json json_from_text(const pqxx::field& field) {
+nlohmann::json json_from_text(const pqxx::field_ref field) {
     if (field.is_null()) {
         return nlohmann::json::object();
     }
     return nlohmann::json::parse(field.as<std::string>());
 }
 
-std::optional<nlohmann::json> optional_json_from_text(const pqxx::field& field) {
+std::optional<nlohmann::json> optional_json_from_text(const pqxx::field_ref field) {
     if (field.is_null()) {
         return std::nullopt;
     }
@@ -46,6 +46,10 @@ Task task_from_row(const pqxx::row& row) {
         .started_at = optional_string(row["started_at"]),
         .finished_at = optional_string(row["finished_at"])
     };
+}
+
+Task task_from_row(const pqxx::row_ref& row) {
+    return task_from_row(pqxx::row{row});
 }
 
 constexpr auto kTaskSelect = R"SQL(

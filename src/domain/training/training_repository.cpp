@@ -9,28 +9,28 @@
 namespace training {
 namespace {
 
-std::optional<int> optional_int(const pqxx::field& field) {
+std::optional<int> optional_int(const pqxx::field_ref field) {
     if (field.is_null()) {
         return std::nullopt;
     }
     return field.as<int>();
 }
 
-std::optional<long long> optional_long(const pqxx::field& field) {
+std::optional<long long> optional_long(const pqxx::field_ref field) {
     if (field.is_null()) {
         return std::nullopt;
     }
     return field.as<long long>();
 }
 
-std::optional<std::string> optional_string(const pqxx::field& field) {
+std::optional<std::string> optional_string(const pqxx::field_ref field) {
     if (field.is_null()) {
         return std::nullopt;
     }
     return field.as<std::string>();
 }
 
-std::string string_or_empty(const pqxx::field& field) {
+std::string string_or_empty(const pqxx::field_ref field) {
     if (field.is_null()) {
         return {};
     }
@@ -70,6 +70,10 @@ TrainingGoal goal_from_row(const pqxx::row& row) {
     return goal;
 }
 
+TrainingGoal goal_from_row(const pqxx::row_ref& row) {
+    return goal_from_row(pqxx::row{row});
+}
+
 TrainingPlan plan_from_row(const pqxx::row& row) {
     TrainingPlan plan;
     plan.id = row["id"].as<long long>();
@@ -83,6 +87,10 @@ TrainingPlan plan_from_row(const pqxx::row& row) {
     plan.algorithm_summary = string_or_empty(row["algorithm_summary"]);
     plan.created_at = string_or_empty(row["created_at"]);
     return plan;
+}
+
+TrainingPlan plan_from_row(const pqxx::row_ref& row) {
+    return plan_from_row(pqxx::row{row});
 }
 
 TrainingPlanItem item_from_row(const pqxx::row& row) {
@@ -99,6 +107,10 @@ TrainingPlanItem item_from_row(const pqxx::row& row) {
     item.last_verdict = optional_string(row["last_verdict"]);
     item.updated_at = string_or_empty(row["updated_at"]);
     return item;
+}
+
+TrainingPlanItem item_from_row(const pqxx::row_ref& row) {
+    return item_from_row(pqxx::row{row});
 }
 
 TrainingProblemCandidate candidate_from_row(const pqxx::row& row) {
@@ -120,6 +132,10 @@ TrainingProblemCandidate candidate_from_row(const pqxx::row& row) {
         }
     }
     return candidate;
+}
+
+TrainingProblemCandidate candidate_from_row(const pqxx::row_ref& row) {
+    return candidate_from_row(pqxx::row{row});
 }
 
 constexpr auto kGoalSelect = R"SQL(

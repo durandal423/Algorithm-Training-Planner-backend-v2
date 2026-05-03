@@ -5,14 +5,14 @@
 namespace auth {
 namespace {
 
-std::optional<std::string> optional_string(const pqxx::field& field) {
+std::optional<std::string> optional_string(const pqxx::field_ref field) {
     if (field.is_null()) {
         return std::nullopt;
     }
     return field.as<std::string>();
 }
 
-std::string string_or_empty(const pqxx::field& field) {
+std::string string_or_empty(const pqxx::field_ref field) {
     if (field.is_null()) {
         return {};
     }
@@ -32,6 +32,10 @@ User user_from_row(const pqxx::row& row) {
     user.created_at = string_or_empty(row["created_at"]);
     user.updated_at = string_or_empty(row["updated_at"]);
     return user;
+}
+
+User user_from_row(const pqxx::row_ref& row) {
+    return user_from_row(pqxx::row{row});
 }
 
 constexpr auto kUserSelect = R"SQL(

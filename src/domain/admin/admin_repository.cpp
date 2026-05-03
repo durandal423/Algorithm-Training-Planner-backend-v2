@@ -7,14 +7,14 @@
 namespace admin {
 namespace {
 
-std::optional<long long> optional_long(const pqxx::field& field) {
+std::optional<long long> optional_long(const pqxx::field_ref field) {
     if (field.is_null()) {
         return std::nullopt;
     }
     return field.as<long long>();
 }
 
-std::string string_or_empty(const pqxx::field& field) {
+std::string string_or_empty(const pqxx::field_ref field) {
     if (field.is_null()) {
         return {};
     }
@@ -31,6 +31,10 @@ AuditLog audit_log_from_row(const pqxx::row& row) {
     log.metadata_json = string_or_empty(row["metadata"]);
     log.created_at = string_or_empty(row["created_at"]);
     return log;
+}
+
+AuditLog audit_log_from_row(const pqxx::row_ref& row) {
+    return audit_log_from_row(pqxx::row{row});
 }
 
 } // namespace

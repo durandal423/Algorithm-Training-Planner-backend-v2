@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.28)
-project(try-crow CXX)
+project(Algorithm-Training-Planner-backend CXX)
 
 include(${CMAKE_SOURCE_DIR}/cmake/LoadDotEnv.cmake)
 load_dotenv(${CMAKE_SOURCE_DIR}/.env)
@@ -18,6 +18,10 @@ find_package(spdlog CONFIG REQUIRED)
 find_package(Catch2 CONFIG REQUIRED)
 
 option(TRY_CROW_ENABLE_PCH "Enable precompiled headers for faster local rebuilds" ON)
+
+# This project does not use C++20 modules. Newer CMake versions scan C++20+
+# targets by default, which requires clang-scan-deps when building with Clang.
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
 add_executable(${PROJECT_NAME} 
     src/main.cpp

@@ -7,28 +7,28 @@
 namespace judge {
 namespace {
 
-std::optional<std::string> optional_string(const pqxx::field& field) {
+std::optional<std::string> optional_string(const pqxx::field_ref field) {
     if (field.is_null()) {
         return std::nullopt;
     }
     return field.as<std::string>();
 }
 
-std::optional<int> optional_int(const pqxx::field& field) {
+std::optional<int> optional_int(const pqxx::field_ref field) {
     if (field.is_null()) {
         return std::nullopt;
     }
     return field.as<int>();
 }
 
-std::optional<long long> optional_long(const pqxx::field& field) {
+std::optional<long long> optional_long(const pqxx::field_ref field) {
     if (field.is_null()) {
         return std::nullopt;
     }
     return field.as<long long>();
 }
 
-std::string string_or_empty(const pqxx::field& field) {
+std::string string_or_empty(const pqxx::field_ref field) {
     if (field.is_null()) {
         return {};
     }
@@ -51,6 +51,10 @@ JudgeConfig config_from_row(const pqxx::row& row) {
     return config;
 }
 
+JudgeConfig config_from_row(const pqxx::row_ref& row) {
+    return config_from_row(pqxx::row{row});
+}
+
 JudgeTestCase test_case_from_row(const pqxx::row& row) {
     JudgeTestCase test_case;
     test_case.id = row["id"].as<long long>();
@@ -64,6 +68,10 @@ JudgeTestCase test_case_from_row(const pqxx::row& row) {
     test_case.time_limit_ms = optional_int(row["time_limit_ms"]);
     test_case.memory_limit_mb = optional_int(row["memory_limit_mb"]);
     return test_case;
+}
+
+JudgeTestCase test_case_from_row(const pqxx::row_ref& row) {
+    return test_case_from_row(pqxx::row{row});
 }
 
 Submission submission_from_row(const pqxx::row& row) {
@@ -87,6 +95,10 @@ Submission submission_from_row(const pqxx::row& row) {
     return submission;
 }
 
+Submission submission_from_row(const pqxx::row_ref& row) {
+    return submission_from_row(pqxx::row{row});
+}
+
 Submission submission_summary_from_row(const pqxx::row& row) {
     Submission submission;
     submission.id = row["id"].as<long long>();
@@ -107,6 +119,10 @@ Submission submission_summary_from_row(const pqxx::row& row) {
     return submission;
 }
 
+Submission submission_summary_from_row(const pqxx::row_ref& row) {
+    return submission_summary_from_row(pqxx::row{row});
+}
+
 SubmissionResult result_from_row(const pqxx::row& row) {
     SubmissionResult result;
     result.id = row["id"].as<long long>();
@@ -122,6 +138,10 @@ SubmissionResult result_from_row(const pqxx::row& row) {
     result.stderr_sample = string_or_empty(row["stderr_sample"]);
     result.message = string_or_empty(row["message"]);
     return result;
+}
+
+SubmissionResult result_from_row(const pqxx::row_ref& row) {
+    return result_from_row(pqxx::row{row});
 }
 
 constexpr auto kSubmissionSelect = R"SQL(
@@ -188,6 +208,7 @@ JudgeConfig JudgeRepository::upsertConfig(const JudgeConfig& config) const {
                       output_limit_kb, compare_mode, float_epsilon
         )SQL",
         pqxx::params{
+            tx,
             config.problem_id,
             config.enabled,
             config.language,

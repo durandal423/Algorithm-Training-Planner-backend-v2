@@ -9,14 +9,14 @@
 namespace problem {
 namespace {
 
-std::optional<std::string> optional_string(const pqxx::field& field) {
+std::optional<std::string> optional_string(const pqxx::field_ref field) {
     if (field.is_null()) {
         return std::nullopt;
     }
     return field.as<std::string>();
 }
 
-std::string string_or_empty(const pqxx::field& field) {
+std::string string_or_empty(const pqxx::field_ref field) {
     if (field.is_null()) {
         return {};
     }
@@ -60,6 +60,10 @@ Problem problem_from_row(const pqxx::row& row) {
     return problem;
 }
 
+Problem problem_from_row(const pqxx::row_ref& row) {
+    return problem_from_row(pqxx::row{row});
+}
+
 ProblemSummary problem_summary_from_row(const pqxx::row& row) {
     ProblemSummary problem;
     problem.id = row["id"].as<long long>();
@@ -78,12 +82,20 @@ ProblemSummary problem_summary_from_row(const pqxx::row& row) {
     return problem;
 }
 
+ProblemSummary problem_summary_from_row(const pqxx::row_ref& row) {
+    return problem_summary_from_row(pqxx::row{row});
+}
+
 Tag tag_from_row(const pqxx::row& row) {
     Tag tag;
     tag.id = row["id"].as<long long>();
     tag.name = row["name"].as<std::string>();
     tag.description = string_or_empty(row["description"]);
     return tag;
+}
+
+Tag tag_from_row(const pqxx::row_ref& row) {
+    return tag_from_row(pqxx::row{row});
 }
 
 constexpr auto kProblemSelect = R"SQL(

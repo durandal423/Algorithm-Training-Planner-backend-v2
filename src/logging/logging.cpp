@@ -30,7 +30,7 @@ void AccessLogger::after_handle(crow::request& req, crow::response& res, context
 }
 
 
-void CrowSpdlogHandler::log(std::string message, crow::LogLevel level) {
+void CrowSpdlogHandler::log(const std::string& message, crow::LogLevel level) {
     switch (level) {
         case crow::LogLevel::Debug:
             spdlog::debug("[crow] {}", message);
