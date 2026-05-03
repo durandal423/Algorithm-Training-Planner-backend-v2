@@ -7,141 +7,93 @@
 namespace judge {
 namespace {
 
-std::optional<std::string> optional_string(const pqxx::field_ref field) {
-    if (field.is_null()) {
-        return std::nullopt;
-    }
-    return field.as<std::string>();
-}
-
-std::optional<int> optional_int(const pqxx::field_ref field) {
-    if (field.is_null()) {
-        return std::nullopt;
-    }
-    return field.as<int>();
-}
-
-std::optional<long long> optional_long(const pqxx::field_ref field) {
-    if (field.is_null()) {
-        return std::nullopt;
-    }
-    return field.as<long long>();
-}
-
-std::string string_or_empty(const pqxx::field_ref field) {
-    if (field.is_null()) {
-        return {};
-    }
-    return field.as<std::string>();
-}
-
-JudgeConfig config_from_row(const pqxx::row& row) {
+JudgeConfig config_from_row(const auto& row) {
     JudgeConfig config;
-    config.id = row["id"].as<long long>();
-    config.problem_id = row["problem_id"].as<long long>();
-    config.enabled = row["enabled"].as<bool>();
-    config.language = row["language"].as<std::string>();
-    config.compile_command_template = optional_string(row["compile_command_template"]);
-    config.run_command_template = optional_string(row["run_command_template"]);
-    config.time_limit_ms = row["time_limit_ms"].as<int>();
-    config.memory_limit_mb = row["memory_limit_mb"].as<int>();
-    config.output_limit_kb = row["output_limit_kb"].as<int>();
-    config.compare_mode = row["compare_mode"].as<std::string>();
-    config.float_epsilon = row["float_epsilon"].as<double>();
+    config.id = row["id"].template as<long long>();
+    config.problem_id = row["problem_id"].template as<long long>();
+    config.enabled = row["enabled"].template as<bool>();
+    config.language = row["language"].template as<std::string>();
+    config.compile_command_template = row["compile_command_template"].template get<std::string>();
+    config.run_command_template = row["run_command_template"].template get<std::string>();
+    config.time_limit_ms = row["time_limit_ms"].template as<int>();
+    config.memory_limit_mb = row["memory_limit_mb"].template as<int>();
+    config.output_limit_kb = row["output_limit_kb"].template as<int>();
+    config.compare_mode = row["compare_mode"].template as<std::string>();
+    config.float_epsilon = row["float_epsilon"].template as<double>();
     return config;
 }
 
-JudgeConfig config_from_row(const pqxx::row_ref& row) {
-    return config_from_row(pqxx::row{row});
-}
-
-JudgeTestCase test_case_from_row(const pqxx::row& row) {
+JudgeTestCase test_case_from_row(const auto& row) {
     JudgeTestCase test_case;
-    test_case.id = row["id"].as<long long>();
-    test_case.problem_id = row["problem_id"].as<long long>();
-    test_case.name = string_or_empty(row["name"]);
-    test_case.input_data = row["input_data"].as<std::string>();
-    test_case.expected_output = optional_string(row["expected_output"]);
-    test_case.visibility = row["visibility"].as<std::string>();
-    test_case.points = row["points"].as<int>();
-    test_case.order_index = row["order_index"].as<int>();
-    test_case.time_limit_ms = optional_int(row["time_limit_ms"]);
-    test_case.memory_limit_mb = optional_int(row["memory_limit_mb"]);
+    test_case.id = row["id"].template as<long long>();
+    test_case.problem_id = row["problem_id"].template as<long long>();
+    test_case.name = row["name"].template as<std::string>("");
+    test_case.input_data = row["input_data"].template as<std::string>();
+    test_case.expected_output = row["expected_output"].template get<std::string>();
+    test_case.visibility = row["visibility"].template as<std::string>();
+    test_case.points = row["points"].template as<int>();
+    test_case.order_index = row["order_index"].template as<int>();
+    test_case.time_limit_ms = row["time_limit_ms"].template get<int>();
+    test_case.memory_limit_mb = row["memory_limit_mb"].template get<int>();
     return test_case;
 }
 
-JudgeTestCase test_case_from_row(const pqxx::row_ref& row) {
-    return test_case_from_row(pqxx::row{row});
-}
-
-Submission submission_from_row(const pqxx::row& row) {
+Submission submission_from_row(const auto& row) {
     Submission submission;
-    submission.id = row["id"].as<long long>();
-    submission.problem_id = row["problem_id"].as<long long>();
-    submission.user_id = optional_long(row["user_id"]);
-    submission.language = row["language"].as<std::string>();
-    submission.source_code = row["source_code"].as<std::string>();
-    submission.status = row["status"].as<std::string>();
-    submission.verdict = optional_string(row["verdict"]);
-    submission.score = row["score"].as<int>();
-    submission.compile_stdout = string_or_empty(row["compile_stdout"]);
-    submission.compile_stderr = string_or_empty(row["compile_stderr"]);
-    submission.compile_time_ms = optional_int(row["compile_time_ms"]);
-    submission.max_time_ms = optional_int(row["max_time_ms"]);
-    submission.max_memory_kb = optional_int(row["max_memory_kb"]);
-    submission.submitted_at = string_or_empty(row["submitted_at"]);
-    submission.started_at = optional_string(row["started_at"]);
-    submission.finished_at = optional_string(row["finished_at"]);
+    submission.id = row["id"].template as<long long>();
+    submission.problem_id = row["problem_id"].template as<long long>();
+    submission.user_id = row["user_id"].template get<long long>();
+    submission.language = row["language"].template as<std::string>();
+    submission.source_code = row["source_code"].template as<std::string>();
+    submission.status = row["status"].template as<std::string>();
+    submission.verdict = row["verdict"].template get<std::string>();
+    submission.score = row["score"].template as<int>();
+    submission.compile_stdout = row["compile_stdout"].template as<std::string>("");
+    submission.compile_stderr = row["compile_stderr"].template as<std::string>("");
+    submission.compile_time_ms = row["compile_time_ms"].template get<int>();
+    submission.max_time_ms = row["max_time_ms"].template get<int>();
+    submission.max_memory_kb = row["max_memory_kb"].template get<int>();
+    submission.submitted_at = row["submitted_at"].template as<std::string>("");
+    submission.started_at = row["started_at"].template get<std::string>();
+    submission.finished_at = row["finished_at"].template get<std::string>();
     return submission;
 }
 
-Submission submission_from_row(const pqxx::row_ref& row) {
-    return submission_from_row(pqxx::row{row});
-}
-
-Submission submission_summary_from_row(const pqxx::row& row) {
+Submission submission_summary_from_row(const auto& row) {
     Submission submission;
-    submission.id = row["id"].as<long long>();
-    submission.problem_id = row["problem_id"].as<long long>();
-    submission.user_id = optional_long(row["user_id"]);
-    submission.language = row["language"].as<std::string>();
-    submission.status = row["status"].as<std::string>();
-    submission.verdict = optional_string(row["verdict"]);
-    submission.score = row["score"].as<int>();
-    submission.compile_stdout = string_or_empty(row["compile_stdout"]);
-    submission.compile_stderr = string_or_empty(row["compile_stderr"]);
-    submission.compile_time_ms = optional_int(row["compile_time_ms"]);
-    submission.max_time_ms = optional_int(row["max_time_ms"]);
-    submission.max_memory_kb = optional_int(row["max_memory_kb"]);
-    submission.submitted_at = string_or_empty(row["submitted_at"]);
-    submission.started_at = optional_string(row["started_at"]);
-    submission.finished_at = optional_string(row["finished_at"]);
+    submission.id = row["id"].template as<long long>();
+    submission.problem_id = row["problem_id"].template as<long long>();
+    submission.user_id = row["user_id"].template get<long long>();
+    submission.language = row["language"].template as<std::string>();
+    submission.status = row["status"].template as<std::string>();
+    submission.verdict = row["verdict"].template get<std::string>();
+    submission.score = row["score"].template as<int>();
+    submission.compile_stdout = row["compile_stdout"].template as<std::string>("");
+    submission.compile_stderr = row["compile_stderr"].template as<std::string>("");
+    submission.compile_time_ms = row["compile_time_ms"].template get<int>();
+    submission.max_time_ms = row["max_time_ms"].template get<int>();
+    submission.max_memory_kb = row["max_memory_kb"].template get<int>();
+    submission.submitted_at = row["submitted_at"].template as<std::string>("");
+    submission.started_at = row["started_at"].template get<std::string>();
+    submission.finished_at = row["finished_at"].template get<std::string>();
     return submission;
 }
 
-Submission submission_summary_from_row(const pqxx::row_ref& row) {
-    return submission_summary_from_row(pqxx::row{row});
-}
-
-SubmissionResult result_from_row(const pqxx::row& row) {
+SubmissionResult result_from_row(const auto& row) {
     SubmissionResult result;
-    result.id = row["id"].as<long long>();
-    result.submission_id = row["submission_id"].as<long long>();
-    result.test_case_id = optional_long(row["test_case_id"]);
-    result.order_index = row["order_index"].as<int>();
-    result.status = row["status"].as<std::string>();
-    result.verdict = optional_string(row["verdict"]);
-    result.time_ms = optional_int(row["time_ms"]);
-    result.memory_kb = optional_int(row["memory_kb"]);
-    result.exit_code = optional_int(row["exit_code"]);
-    result.stdout_sample = string_or_empty(row["stdout_sample"]);
-    result.stderr_sample = string_or_empty(row["stderr_sample"]);
-    result.message = string_or_empty(row["message"]);
+    result.id = row["id"].template as<long long>();
+    result.submission_id = row["submission_id"].template as<long long>();
+    result.test_case_id = row["test_case_id"].template get<long long>();
+    result.order_index = row["order_index"].template as<int>();
+    result.status = row["status"].template as<std::string>();
+    result.verdict = row["verdict"].template get<std::string>();
+    result.time_ms = row["time_ms"].template get<int>();
+    result.memory_kb = row["memory_kb"].template get<int>();
+    result.exit_code = row["exit_code"].template get<int>();
+    result.stdout_sample = row["stdout_sample"].template as<std::string>("");
+    result.stderr_sample = row["stderr_sample"].template as<std::string>("");
+    result.message = row["message"].template as<std::string>("");
     return result;
-}
-
-SubmissionResult result_from_row(const pqxx::row_ref& row) {
-    return result_from_row(pqxx::row{row});
 }
 
 constexpr auto kSubmissionSelect = R"SQL(
@@ -180,7 +132,7 @@ std::optional<JudgeConfig> JudgeRepository::getConfig(long long problem_id) cons
     if (!row) {
         return std::nullopt;
     }
-    return config_from_row(*row);
+    return config_from_row(row.value());
 }
 
 JudgeConfig JudgeRepository::upsertConfig(const JudgeConfig& config) const {
@@ -220,9 +172,9 @@ JudgeConfig JudgeRepository::upsertConfig(const JudgeConfig& config) const {
             config.compare_mode,
             config.float_epsilon
         }
-    ).one_row();
+    ).opt_row();
     tx.commit();
-    return config_from_row(row);
+    return config_from_row(row.value());
 }
 
 std::vector<JudgeTestCase> JudgeRepository::listJudgingTestCases(long long problem_id) const {
@@ -295,7 +247,7 @@ std::optional<JudgeTestCase> JudgeRepository::getTestCase(long long id) const {
     if (!row) {
         return std::nullopt;
     }
-    return test_case_from_row(*row);
+    return test_case_from_row(row.value());
 }
 
 std::optional<JudgeTestCase> JudgeRepository::updateTestCase(
@@ -335,7 +287,7 @@ std::optional<JudgeTestCase> JudgeRepository::updateTestCase(
     if (!row) {
         return std::nullopt;
     }
-    return test_case_from_row(*row);
+    return test_case_from_row(row.value());
 }
 
 bool JudgeRepository::deleteTestCase(long long id) const {
@@ -380,7 +332,7 @@ std::optional<Submission> JudgeRepository::getSubmission(long long id) const {
         tx.commit();
         return std::nullopt;
     }
-    auto submission = submission_from_row(*row);
+    auto submission = submission_from_row(row.value());
     submission.results = loadResults(tx, submission.id);
     tx.commit();
     return submission;
@@ -457,7 +409,7 @@ std::optional<Submission> JudgeRepository::fetchNextQueuedSubmission(const std::
         tx.commit();
         return std::nullopt;
     }
-    auto submission = submission_from_row(*row);
+    auto submission = submission_from_row(row.value());
     tx.exec(
         "DELETE FROM submission_results WHERE submission_id = $1",
         pqxx::params{submission.id}

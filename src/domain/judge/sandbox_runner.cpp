@@ -1,5 +1,6 @@
 #include "domain/judge/sandbox_runner.hpp"
 
+#include "api/http_json.hpp"
 #include "config.hpp"
 
 #include <nlohmann/json.hpp>
@@ -258,7 +259,7 @@ void run_or_throw(const std::string& command, const std::string& action, int tim
     if (process_succeeded(capture.process)) {
         return;
     }
-    const auto details = trim_copy(capture.stderr_text.empty() ? capture.stdout_text : capture.stderr_text);
+    const auto details = api::trim_copy(capture.stderr_text.empty() ? capture.stdout_text : capture.stderr_text);
     throw std::runtime_error(action + " failed" + (details.empty() ? std::string{} : ": " + details));
 }
 

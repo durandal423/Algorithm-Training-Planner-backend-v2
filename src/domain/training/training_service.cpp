@@ -1,60 +1,25 @@
 #include "domain/training/training_service.hpp"
 
+#include "api/http_json.hpp"
 #include "config.hpp"
 #include "domain/training/training_repository.hpp"
 
-#include <algorithm>
 #include <optional>
 
 namespace training {
 namespace {
 
-std::optional<std::string> optional_string(const nlohmann::json& body, const char* key) {
-    if (!body.contains(key) || body.at(key).is_null()) {
-        return std::nullopt;
-    }
-    return body.at(key).get<std::string>();
-}
-
-long long required_long(const nlohmann::json& body, const char* key) {
-    if (!body.contains(key) || body.at(key).is_null()) {
-        throw TrainingBadRequest{std::string{key} + " is required"};
-    }
-    return body.at(key).get<long long>();
-}
-
-std::vector<std::string> string_array(const nlohmann::json& body, const char* key) {
-    std::vector<std::string> values;
-    if (!body.contains(key) || !body.at(key).is_array()) {
-        return values;
-    }
-    for (const auto& value : body.at(key)) {
-        if (value.is_string()) {
-            values.push_back(value.get<std::string>());
-        }
-    }
-    return values;
-}
-
 TrainingGoal goal_from_json(
     const nlohmann::json& body,
     long long user_id
 ) {
-    if (!body.contains("name") || !body.at("name").is_string()) {
-        throw TrainingBadRequest{"name is required"};
-    }
-
     TrainingGoal goal;
     goal.user_id = user_id;
-    goal.name = body.at("name").get<std::string>();
+    goal.name = api::required_string(body, "name");
     goal.target_count = body.value("targetCount", 10);
     goal.time_budget_minutes = body.value("timeBudgetMinutes", 180);
-    goal.difficulty_min = body.contains("difficultyMin") && !body.at("difficultyMin").is_null()
-        ? std::optional<int>{body.at("difficultyMin").get<int>()}
-        : std::nullopt;
-    goal.difficulty_max = body.contains("difficultyMax") && !body.at("difficultyMax").is_null()
-        ? std::optional<int>{body.at("difficultyMax").get<int>()}
-        : std::nullopt;
+    goal.difficulty_min = body.value("difficultyMin", std::optional<int>{});
+    goal.difficulty_max = body.value("difficultyMax", std::optional<int>{});
     goal.prefer_wrong_problems = body.value("preferWrongProblems", true);
     goal.prefer_weak_tags = body.value("preferWeakTags", true);
     goal.difficulty_weight = body.value("difficultyWeight", 10);
@@ -62,7 +27,7 @@ TrainingGoal goal_from_json(
     goal.wrong_problem_weight = body.value("wrongProblemWeight", 15);
     goal.weak_tag_weight = body.value("weakTagWeight", 15);
     goal.estimated_time_weight = body.value("estimatedTimeWeight", 1);
-    goal.tag_names = string_array(body, "tags");
+    goal.tag_names = api::string_array(body, "tags");
 
     if (goal.name.empty()) {
         throw TrainingBadRequest{"name must not be empty"};
@@ -158,8 +123,8 @@ long long TrainingService::enqueuePlanGeneration(
     const task::TaskScheduler& scheduler,
     const TrainingPlanGenerationService& generator
 ) const {
-    const auto goal_id = required_long(body, "goalId");
-    const auto name = optional_string(body, "name");
+    const auto goal_id = api::required_long(body, "goalId");
+    const auto name = body.value("name", std::optional<std::string>{});
     const auto status = body.value("status", std::string{"draft"});
 
     TrainingRepository repository{pool_};

@@ -1,141 +1,84 @@
 #include "domain/training/training_repository.hpp"
+#include "api/http_json.hpp"
 
 #include <pqxx/pqxx>
 
-#include <algorithm>
 #include <cctype>
 #include <sstream>
 
 namespace training {
 namespace {
 
-std::optional<int> optional_int(const pqxx::field_ref field) {
-    if (field.is_null()) {
-        return std::nullopt;
-    }
-    return field.as<int>();
-}
-
-std::optional<long long> optional_long(const pqxx::field_ref field) {
-    if (field.is_null()) {
-        return std::nullopt;
-    }
-    return field.as<long long>();
-}
-
-std::optional<std::string> optional_string(const pqxx::field_ref field) {
-    if (field.is_null()) {
-        return std::nullopt;
-    }
-    return field.as<std::string>();
-}
-
-std::string string_or_empty(const pqxx::field_ref field) {
-    if (field.is_null()) {
-        return {};
-    }
-    return field.as<std::string>();
-}
-
-std::string trim_copy(std::string text) {
-    const auto first = std::find_if_not(text.begin(), text.end(), [](unsigned char ch) {
-        return std::isspace(ch);
-    });
-    const auto last = std::find_if_not(text.rbegin(), text.rend(), [](unsigned char ch) {
-        return std::isspace(ch);
-    }).base();
-    if (first >= last) {
-        return {};
-    }
-    return std::string{first, last};
-}
-
-TrainingGoal goal_from_row(const pqxx::row& row) {
+TrainingGoal goal_from_row(const auto& row) {
     TrainingGoal goal;
-    goal.id = row["id"].as<long long>();
-    goal.user_id = row["user_id"].as<long long>();
-    goal.name = row["name"].as<std::string>();
-    goal.target_count = row["target_count"].as<int>();
-    goal.time_budget_minutes = row["time_budget_minutes"].as<int>();
-    goal.difficulty_min = optional_int(row["difficulty_min"]);
-    goal.difficulty_max = optional_int(row["difficulty_max"]);
-    goal.prefer_wrong_problems = row["prefer_wrong_problems"].as<bool>();
-    goal.prefer_weak_tags = row["prefer_weak_tags"].as<bool>();
-    goal.difficulty_weight = row["difficulty_weight"].as<int>();
-    goal.tag_coverage_weight = row["tag_coverage_weight"].as<int>();
-    goal.wrong_problem_weight = row["wrong_problem_weight"].as<int>();
-    goal.weak_tag_weight = row["weak_tag_weight"].as<int>();
-    goal.estimated_time_weight = row["estimated_time_weight"].as<int>();
-    goal.created_at = string_or_empty(row["created_at"]);
+    goal.id = row["id"].template as<long long>();
+    goal.user_id = row["user_id"].template as<long long>();
+    goal.name = row["name"].template as<std::string>();
+    goal.target_count = row["target_count"].template as<int>();
+    goal.time_budget_minutes = row["time_budget_minutes"].template as<int>();
+    goal.difficulty_min = row["difficulty_min"].template get<int>();
+    goal.difficulty_max = row["difficulty_max"].template get<int>();
+    goal.prefer_wrong_problems = row["prefer_wrong_problems"].template as<bool>();
+    goal.prefer_weak_tags = row["prefer_weak_tags"].template as<bool>();
+    goal.difficulty_weight = row["difficulty_weight"].template as<int>();
+    goal.tag_coverage_weight = row["tag_coverage_weight"].template as<int>();
+    goal.wrong_problem_weight = row["wrong_problem_weight"].template as<int>();
+    goal.weak_tag_weight = row["weak_tag_weight"].template as<int>();
+    goal.estimated_time_weight = row["estimated_time_weight"].template as<int>();
+    goal.created_at = row["created_at"].template as<std::string>("");
     return goal;
 }
 
-TrainingGoal goal_from_row(const pqxx::row_ref& row) {
-    return goal_from_row(pqxx::row{row});
-}
-
-TrainingPlan plan_from_row(const pqxx::row& row) {
+TrainingPlan plan_from_row(const auto& row) {
     TrainingPlan plan;
-    plan.id = row["id"].as<long long>();
-    plan.user_id = row["user_id"].as<long long>();
-    plan.goal_id = optional_long(row["goal_id"]);
-    plan.name = row["name"].as<std::string>();
-    plan.status = row["status"].as<std::string>();
-    plan.candidate_count = row["candidate_count"].as<int>();
-    plan.selected_count = row["selected_count"].as<int>();
-    plan.total_estimated_minutes = row["total_estimated_minutes"].as<int>();
-    plan.algorithm_summary = string_or_empty(row["algorithm_summary"]);
-    plan.created_at = string_or_empty(row["created_at"]);
+    plan.id = row["id"].template as<long long>();
+    plan.user_id = row["user_id"].template as<long long>();
+    plan.goal_id = row["goal_id"].template get<long long>();
+    plan.name = row["name"].template as<std::string>();
+    plan.status = row["status"].template as<std::string>();
+    plan.candidate_count = row["candidate_count"].template as<int>();
+    plan.selected_count = row["selected_count"].template as<int>();
+    plan.total_estimated_minutes = row["total_estimated_minutes"].template as<int>();
+    plan.algorithm_summary = row["algorithm_summary"].template as<std::string>("");
+    plan.created_at = row["created_at"].template as<std::string>("");
     return plan;
 }
 
-TrainingPlan plan_from_row(const pqxx::row_ref& row) {
-    return plan_from_row(pqxx::row{row});
-}
-
-TrainingPlanItem item_from_row(const pqxx::row& row) {
+TrainingPlanItem item_from_row(const auto& row) {
     TrainingPlanItem item;
-    item.id = row["id"].as<long long>();
-    item.plan_id = row["plan_id"].as<long long>();
-    item.problem_id = row["problem_id"].as<long long>();
-    item.order_index = row["order_index"].as<int>();
-    item.estimated_minutes = row["estimated_minutes"].as<int>();
-    item.score = row["score"].as<int>();
-    item.selected_reason = string_or_empty(row["selected_reason"]);
-    item.status = row["status"].as<std::string>();
-    item.last_submission_id = optional_long(row["last_submission_id"]);
-    item.last_verdict = optional_string(row["last_verdict"]);
-    item.updated_at = string_or_empty(row["updated_at"]);
+    item.id = row["id"].template as<long long>();
+    item.plan_id = row["plan_id"].template as<long long>();
+    item.problem_id = row["problem_id"].template as<long long>();
+    item.order_index = row["order_index"].template as<int>();
+    item.estimated_minutes = row["estimated_minutes"].template as<int>();
+    item.score = row["score"].template as<int>();
+    item.selected_reason = row["selected_reason"].template as<std::string>("");
+    item.status = row["status"].template as<std::string>();
+    item.last_submission_id = row["last_submission_id"].template get<long long>();
+    item.last_verdict = row["last_verdict"].template get<std::string>();
+    item.updated_at = row["updated_at"].template as<std::string>("");
     return item;
 }
 
-TrainingPlanItem item_from_row(const pqxx::row_ref& row) {
-    return item_from_row(pqxx::row{row});
-}
-
-TrainingProblemCandidate candidate_from_row(const pqxx::row& row) {
+TrainingProblemCandidate candidate_from_row(const auto& row) {
     TrainingProblemCandidate candidate;
-    candidate.id = row["id"].as<long long>();
-    candidate.code = row["code"].as<std::string>();
-    candidate.title = row["title"].as<std::string>();
-    candidate.difficulty = row["difficulty"].as<int>();
-    candidate.estimated_minutes = row["estimated_minutes"].as<int>();
-    candidate.matched_tag_count = row["matched_tag_count"].as<int>();
-    candidate.wrong_attempt_count = row["wrong_attempt_count"].as<int>();
+    candidate.id = row["id"].template as<long long>();
+    candidate.code = row["code"].template as<std::string>();
+    candidate.title = row["title"].template as<std::string>();
+    candidate.difficulty = row["difficulty"].template as<int>();
+    candidate.estimated_minutes = row["estimated_minutes"].template as<int>();
+    candidate.matched_tag_count = row["matched_tag_count"].template as<int>();
+    candidate.wrong_attempt_count = row["wrong_attempt_count"].template as<int>();
 
-    std::istringstream input{string_or_empty(row["tag_names"])};
+    std::istringstream input{row["tag_names"].template as<std::string>("")};
     std::string tag;
     while (std::getline(input, tag, ',')) {
-        tag = trim_copy(tag);
+        tag = api::trim_copy(tag);
         if (!tag.empty()) {
             candidate.tag_names.push_back(std::move(tag));
         }
     }
     return candidate;
-}
-
-TrainingProblemCandidate candidate_from_row(const pqxx::row_ref& row) {
-    return candidate_from_row(pqxx::row{row});
 }
 
 constexpr auto kGoalSelect = R"SQL(
@@ -205,7 +148,7 @@ std::optional<TrainingGoal> TrainingRepository::getGoal(long long id, long long 
         tx.commit();
         return std::nullopt;
     }
-    auto goal = goal_from_row(*row);
+    auto goal = goal_from_row(row.value());
     goal.tag_names = loadGoalTags(tx, goal.id);
     tx.commit();
     return goal;
@@ -351,7 +294,7 @@ std::optional<TrainingPlan> TrainingRepository::getPlan(long long id, long long 
     if (!row) {
         return std::nullopt;
     }
-    return plan_from_row(*row);
+    return plan_from_row(row.value());
 }
 
 std::vector<TrainingPlan> TrainingRepository::listPlans(long long user_id) const {
@@ -518,7 +461,7 @@ long long TrainingRepository::createRecord(const TrainingRecord& record) const {
 }
 
 long long TrainingRepository::upsertTag(pqxx::transaction_base& tx, const std::string& name) const {
-    const auto clean_name = trim_copy(name);
+    const auto clean_name = api::trim_copy(name);
     if (clean_name.empty()) {
         return 0;
     }
@@ -574,7 +517,7 @@ std::vector<std::string> TrainingRepository::loadGoalTags(
         pqxx::params{goal_id}
     );
     for (const auto& row : rows) {
-        tags.push_back(row["name"].as<std::string>());
+        tags.push_back(row["name"].template as<std::string>());
     }
     return tags;
 }

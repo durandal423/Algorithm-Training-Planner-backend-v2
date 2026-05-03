@@ -1,4 +1,5 @@
 #include "domain/auth/auth_service.hpp"
+#include "api/http_json.hpp"
 
 #include <sodium.h>
 
@@ -16,19 +17,6 @@ bool is_username_char(unsigned char ch) {
     return std::isalnum(ch) || ch == '_' || ch == '-';
 }
 
-std::string trim_copy(std::string text) {
-    const auto first = std::find_if_not(text.begin(), text.end(), [](unsigned char ch) {
-        return std::isspace(ch);
-    });
-    const auto last = std::find_if_not(text.rbegin(), text.rend(), [](unsigned char ch) {
-        return std::isspace(ch);
-    }).base();
-    if (first >= last) {
-        return {};
-    }
-    return std::string{first, last};
-}
-
 } // namespace
 
 AuthService::AuthService(AuthRepository& repository)
@@ -42,10 +30,10 @@ LoginResult AuthService::registerUser(
     const std::string& display_name,
     const std::string& password
 ) const {
-    const auto clean_username = trim_copy(username);
-    const auto clean_display_name = trim_copy(display_name).empty()
+    const auto clean_username = api::trim_copy(username);
+    const auto clean_display_name = api::trim_copy(display_name).empty()
         ? clean_username
-        : trim_copy(display_name);
+        : api::trim_copy(display_name);
     validateNewUser(clean_username, clean_display_name, password);
 
     const auto password_hash = hashPassword(password);
@@ -84,7 +72,7 @@ LoginResult AuthService::login(
     const std::optional<std::string>& user_agent,
     const std::optional<std::string>& ip_address
 ) const {
-    const auto user = repository_.findUserByIdentifier(trim_copy(identifier));
+    const auto user = repository_.findUserByIdentifier(api::trim_copy(identifier));
     if (!user || !verifyPassword(user->password_hash, password)) {
         throw AuthError{"invalid username or password"};
     }

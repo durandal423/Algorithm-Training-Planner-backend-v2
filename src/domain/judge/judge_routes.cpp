@@ -33,8 +33,10 @@ judge::JudgeConfig config_from_json(long long problem_id, const nlohmann::json& 
     config.problem_id = problem_id;
     config.enabled = body.value("enabled", false);
     config.language = body.value("language", std::string{"cpp"});
-    config.compile_command_template = api::optional_string(body, "compileCommandTemplate");
-    config.run_command_template = api::optional_string(body, "runCommandTemplate");
+    config.compile_command_template =
+        body.value("compileCommandTemplate", std::optional<std::string>{});
+    config.run_command_template =
+        body.value("runCommandTemplate", std::optional<std::string>{});
     config.time_limit_ms = body.value("timeLimitMs", 1000);
     config.memory_limit_mb = body.value("memoryLimitMb", 256);
     config.output_limit_kb = body.value("outputLimitKb", 1024);
@@ -48,12 +50,12 @@ judge::JudgeTestCase test_case_from_json(long long problem_id, const nlohmann::j
     test_case.problem_id = problem_id;
     test_case.name = body.value("name", std::string{});
     test_case.input_data = body.at("inputData").get<std::string>();
-    test_case.expected_output = api::optional_string(body, "expectedOutput");
+    test_case.expected_output = body.value("expectedOutput", std::optional<std::string>{});
     test_case.visibility = body.value("visibility", std::string{"hidden"});
     test_case.points = body.value("points", 1);
     test_case.order_index = body.value("orderIndex", 0);
-    test_case.time_limit_ms = api::optional_int(body, "timeLimitMs");
-    test_case.memory_limit_mb = api::optional_int(body, "memoryLimitMb");
+    test_case.time_limit_ms = body.value("timeLimitMs", std::optional<int>{});
+    test_case.memory_limit_mb = body.value("memoryLimitMb", std::optional<int>{});
     return test_case;
 }
 

@@ -1,4 +1,5 @@
 #include "domain/problem/problem_repository.hpp"
+#include "api/http_json.hpp"
 
 #include <pqxx/pqxx>
 
@@ -9,93 +10,50 @@
 namespace problem {
 namespace {
 
-std::optional<std::string> optional_string(const pqxx::field_ref field) {
-    if (field.is_null()) {
-        return std::nullopt;
-    }
-    return field.as<std::string>();
-}
-
-std::string string_or_empty(const pqxx::field_ref field) {
-    if (field.is_null()) {
-        return {};
-    }
-    return field.as<std::string>();
-}
-
-std::string trim_copy(std::string text) {
-    const auto first = std::find_if_not(text.begin(), text.end(), [](unsigned char ch) {
-        return std::isspace(ch);
-    });
-    const auto last = std::find_if_not(text.rbegin(), text.rend(), [](unsigned char ch) {
-        return std::isspace(ch);
-    }).base();
-    if (first >= last) {
-        return {};
-    }
-    return std::string{first, last};
-}
-
-Problem problem_from_row(const pqxx::row& row) {
+Problem problem_from_row(const auto& row) {
     Problem problem;
-    problem.id = row["id"].as<long long>();
-    problem.code = row["code"].as<std::string>();
-    problem.title = row["title"].as<std::string>();
-    problem.source_platform = row["source_platform"].as<std::string>();
-    problem.source_url = optional_string(row["source_url"]);
-    problem.difficulty = row["difficulty"].as<int>();
-    problem.estimated_minutes = row["estimated_minutes"].as<int>();
-    problem.description = string_or_empty(row["description"]);
-    problem.input_format = string_or_empty(row["input_format"]);
-    problem.output_format = string_or_empty(row["output_format"]);
-    problem.sample_input = string_or_empty(row["sample_input"]);
-    problem.sample_output = string_or_empty(row["sample_output"]);
-    problem.hint = string_or_empty(row["hint"]);
-    problem.visibility = row["visibility"].as<std::string>();
-    if (!row["created_by"].is_null()) {
-        problem.created_by = row["created_by"].as<long long>();
-    }
-    problem.created_at = string_or_empty(row["created_at"]);
-    problem.updated_at = string_or_empty(row["updated_at"]);
+    problem.id = row["id"].template as<long long>();
+    problem.code = row["code"].template as<std::string>();
+    problem.title = row["title"].template as<std::string>();
+    problem.source_platform = row["source_platform"].template as<std::string>();
+    problem.source_url = row["source_url"].template get<std::string>();
+    problem.difficulty = row["difficulty"].template as<int>();
+    problem.estimated_minutes = row["estimated_minutes"].template as<int>();
+    problem.description = row["description"].template as<std::string>("");
+    problem.input_format = row["input_format"].template as<std::string>("");
+    problem.output_format = row["output_format"].template as<std::string>("");
+    problem.sample_input = row["sample_input"].template as<std::string>("");
+    problem.sample_output = row["sample_output"].template as<std::string>("");
+    problem.hint = row["hint"].template as<std::string>("");
+    problem.visibility = row["visibility"].template as<std::string>();
+    problem.created_by = row["created_by"].template get<long long>();
+    problem.created_at = row["created_at"].template as<std::string>("");
+    problem.updated_at = row["updated_at"].template as<std::string>("");
     return problem;
 }
 
-Problem problem_from_row(const pqxx::row_ref& row) {
-    return problem_from_row(pqxx::row{row});
-}
-
-ProblemSummary problem_summary_from_row(const pqxx::row& row) {
+ProblemSummary problem_summary_from_row(const auto& row) {
     ProblemSummary problem;
-    problem.id = row["id"].as<long long>();
-    problem.code = row["code"].as<std::string>();
-    problem.title = row["title"].as<std::string>();
-    problem.source_platform = row["source_platform"].as<std::string>();
-    problem.source_url = optional_string(row["source_url"]);
-    problem.difficulty = row["difficulty"].as<int>();
-    problem.estimated_minutes = row["estimated_minutes"].as<int>();
-    problem.visibility = row["visibility"].as<std::string>();
-    if (!row["created_by"].is_null()) {
-        problem.created_by = row["created_by"].as<long long>();
-    }
-    problem.created_at = string_or_empty(row["created_at"]);
-    problem.updated_at = string_or_empty(row["updated_at"]);
+    problem.id = row["id"].template as<long long>();
+    problem.code = row["code"].template as<std::string>();
+    problem.title = row["title"].template as<std::string>();
+    problem.source_platform = row["source_platform"].template as<std::string>();
+    problem.source_url = row["source_url"].template get<std::string>();
+    problem.difficulty = row["difficulty"].template as<int>();
+    problem.estimated_minutes = row["estimated_minutes"].template as<int>();
+    problem.visibility = row["visibility"].template as<std::string>();
+    problem.created_by = row["created_by"].template get<long long>();
+    problem.created_at = row["created_at"].template as<std::string>("");
+    problem.updated_at = row["updated_at"].template as<std::string>("");
     return problem;
 }
 
-ProblemSummary problem_summary_from_row(const pqxx::row_ref& row) {
-    return problem_summary_from_row(pqxx::row{row});
-}
-
-Tag tag_from_row(const pqxx::row& row) {
+Tag tag_from_row(const auto& row) {
     Tag tag;
-    tag.id = row["id"].as<long long>();
-    tag.name = row["name"].as<std::string>();
-    tag.description = string_or_empty(row["description"]);
+    tag.id = row["id"].template as<long long>();
+    tag.name = row["name"].template as<std::string>();
+    tag.description = row["description"].template as<std::string>("");
     return tag;
-}
-
-Tag tag_from_row(const pqxx::row_ref& row) {
-    return tag_from_row(pqxx::row{row});
 }
 
 constexpr auto kProblemSelect = R"SQL(
@@ -171,7 +129,7 @@ std::optional<Problem> ProblemRepository::getProblem(long long id, bool include_
         tx.commit();
         return std::nullopt;
     }
-    auto problem = problem_from_row(*row);
+    auto problem = problem_from_row(row.value());
     problem.tags = loadTags(tx, problem.id);
     tx.commit();
     return problem;
@@ -292,7 +250,7 @@ std::vector<Tag> ProblemRepository::listTags() const {
 }
 
 long long ProblemRepository::upsertTag(pqxx::transaction_base& tx, const std::string& name) const {
-    const auto clean_name = trim_copy(name);
+    const auto clean_name = api::trim_copy(name);
     if (clean_name.empty()) {
         return 0;
     }
@@ -387,7 +345,7 @@ void ProblemRepository::loadTagsForProblems(
         params
     );
     for (const auto& row : rows) {
-        const auto problem_id = row["problem_id"].as<long long>();
+        const auto problem_id = row["problem_id"].template as<long long>();
         const auto found = problems_by_id.find(problem_id);
         if (found == problems_by_id.end()) {
             continue;

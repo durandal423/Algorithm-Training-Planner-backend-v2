@@ -108,7 +108,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     spdlog::spdlog
 )
 
-add_executable(try-crow-judge-worker
+add_executable(Algorithm-judge-worker
     src/judge_worker_main.cpp
     src/logging/logging.hpp
     src/logging/logging.cpp
@@ -131,16 +131,16 @@ add_executable(try-crow-judge-worker
     src/domain/judge/sandbox_runner.hpp
 )
 
-target_include_directories(try-crow-judge-worker PRIVATE
+target_include_directories(Algorithm-judge-worker PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_BINARY_DIR}
 )
 
-target_compile_features(try-crow-judge-worker PRIVATE
+target_compile_features(Algorithm-judge-worker PRIVATE
     cxx_std_23
 )
 
-target_link_libraries(try-crow-judge-worker PRIVATE
+target_link_libraries(Algorithm-judge-worker PRIVATE
     libpqxx::pqxx
     nlohmann_json::nlohmann_json
     spdlog::spdlog
@@ -148,7 +148,7 @@ target_link_libraries(try-crow-judge-worker PRIVATE
 
 enable_testing()
 
-add_executable(try-crow-tests
+add_executable(project-tests
     tests/unit/auth_service_test.cpp
     tests/unit/output_comparator_test.cpp
     tests/unit/training_plan_algorithms_test.cpp
@@ -179,17 +179,17 @@ add_executable(try-crow-tests
     src/domain/task/task_repository.hpp
 )
 
-target_include_directories(try-crow-tests PRIVATE
+target_include_directories(project-tests PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/tests
     ${CMAKE_BINARY_DIR}
 )
 
-target_compile_features(try-crow-tests PRIVATE
+target_compile_features(project-tests PRIVATE
     cxx_std_23
 )
 
-target_link_libraries(try-crow-tests PRIVATE
+target_link_libraries(project-tests PRIVATE
     Catch2::Catch2WithMain
     libpqxx::pqxx
     unofficial-sodium::sodium
@@ -198,4 +198,4 @@ target_link_libraries(try-crow-tests PRIVATE
 )
 
 include(Catch)
-catch_discover_tests(try-crow-tests)
+catch_discover_tests(project-tests)

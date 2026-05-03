@@ -5,37 +5,19 @@
 namespace auth {
 namespace {
 
-std::optional<std::string> optional_string(const pqxx::field_ref field) {
-    if (field.is_null()) {
-        return std::nullopt;
-    }
-    return field.as<std::string>();
-}
-
-std::string string_or_empty(const pqxx::field_ref field) {
-    if (field.is_null()) {
-        return {};
-    }
-    return field.as<std::string>();
-}
-
-User user_from_row(const pqxx::row& row) {
+User user_from_row(const auto& row) {
     User user;
-    user.id = row["id"].as<long long>();
-    user.username = row["username"].as<std::string>();
-    user.email = optional_string(row["email"]);
-    user.display_name = row["display_name"].as<std::string>();
-    user.password_hash = row["password_hash"].as<std::string>();
-    user.role = row["role"].as<std::string>();
-    user.status = row["status"].as<std::string>();
-    user.last_login_at = optional_string(row["last_login_at"]);
-    user.created_at = string_or_empty(row["created_at"]);
-    user.updated_at = string_or_empty(row["updated_at"]);
+    user.id = row["id"].template as<long long>();
+    user.username = row["username"].template as<std::string>();
+    user.email = row["email"].template get<std::string>();
+    user.display_name = row["display_name"].template as<std::string>();
+    user.password_hash = row["password_hash"].template as<std::string>();
+    user.role = row["role"].template as<std::string>();
+    user.status = row["status"].template as<std::string>();
+    user.last_login_at = row["last_login_at"].template get<std::string>();
+    user.created_at = row["created_at"].template as<std::string>();
+    user.updated_at = row["updated_at"].template as<std::string>();
     return user;
-}
-
-User user_from_row(const pqxx::row_ref& row) {
-    return user_from_row(pqxx::row{row});
 }
 
 constexpr auto kUserSelect = R"SQL(
@@ -60,7 +42,7 @@ std::optional<User> AuthRepository::findUserById(long long id) const {
     if (!row) {
         return std::nullopt;
     }
-    return user_from_row(*row);
+    return user_from_row(row.value());
 }
 
 std::optional<User> AuthRepository::findUserByIdentifier(const std::string& identifier) const {
@@ -77,7 +59,7 @@ std::optional<User> AuthRepository::findUserByIdentifier(const std::string& iden
     if (!row) {
         return std::nullopt;
     }
-    return user_from_row(*row);
+    return user_from_row(row.value());
 }
 
 bool AuthRepository::adminExists() const {
@@ -155,7 +137,7 @@ std::optional<User> AuthRepository::findUserByActiveSession(const std::string& t
     if (!row) {
         return std::nullopt;
     }
-    return user_from_row(*row);
+    return user_from_row(row.value());
 }
 
 void AuthRepository::touchSession(const std::string& token_hash) const {
@@ -177,7 +159,7 @@ void AuthRepository::touchSession(const std::string& token_hash) const {
 bool AuthRepository::revokeSession(const std::string& token_hash) const {
     auto lease = pool_.acquire();
     pqxx::work tx{lease.connection()};
-    const auto result = tx.exec(
+    const auto rows = tx.exec(
         R"SQL(
             UPDATE user_sessions
             SET revoked_at = now()
@@ -187,7 +169,7 @@ bool AuthRepository::revokeSession(const std::string& token_hash) const {
         pqxx::params{token_hash}
     );
     tx.commit();
-    return result.affected_rows() > 0;
+    return rows.affected_rows() > 0;
 }
 
 void AuthRepository::markLogin(long long user_id) const {

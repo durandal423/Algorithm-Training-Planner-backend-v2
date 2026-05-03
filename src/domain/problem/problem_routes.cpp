@@ -6,7 +6,6 @@
 #include <exception>
 #include <optional>
 #include <string>
-#include <vector>
 
 namespace {
 
@@ -18,7 +17,7 @@ problem::Problem problem_from_json(
     problem.code = body.at("code").get<std::string>();
     problem.title = body.at("title").get<std::string>();
     problem.source_platform = body.value("sourcePlatform", std::string{"local"});
-    problem.source_url = api::optional_string(body, "sourceUrl");
+    problem.source_url = body.value("sourceUrl", std::optional<std::string>{});
     problem.difficulty = body.at("difficulty").get<int>();
     problem.estimated_minutes = body.value("estimatedMinutes", 30);
     problem.description = body.value("description", std::string{});

@@ -23,7 +23,7 @@ RouteRegistration authRoutesRegistration([](App& app, runtime::ApplicationContex
             auth::AuthService service{repository};
             const auto result = service.registerUser(
                 api::required_string(body, "username"),
-                api::optional_string(body, "email"),
+                body.value("email", std::optional<std::string>{}),
                 body.value("displayName", std::string{}),
                 api::required_string(body, "password")
             );

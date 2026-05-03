@@ -2,10 +2,10 @@
 
 #include "domain/auth/auth_repository.hpp"
 #include "domain/auth/auth_service.hpp"
+#include "api/http_json.hpp"
 
 #include <spdlog/spdlog.h>
 
-#include <algorithm>
 #include <cctype>
 #include <cstdlib>
 #include <optional>
@@ -19,19 +19,6 @@ std::string env_value(const char* key) {
     return value == nullptr ? std::string{} : std::string{value};
 }
 
-std::string trim_copy(std::string text) {
-    const auto first = std::find_if_not(text.begin(), text.end(), [](unsigned char ch) {
-        return std::isspace(ch);
-    });
-    const auto last = std::find_if_not(text.rbegin(), text.rend(), [](unsigned char ch) {
-        return std::isspace(ch);
-    }).base();
-    if (first >= last) {
-        return {};
-    }
-    return std::string{first, last};
-}
-
 } // namespace
 
 void bootstrapAdminFromEnv(ConnectionPool& pool) {
@@ -41,8 +28,8 @@ void bootstrapAdminFromEnv(ConnectionPool& pool) {
         return;
     }
 
-    const auto username = trim_copy(env_value("APP_BOOTSTRAP_ADMIN_USERNAME"));
-    const auto email = trim_copy(env_value("APP_BOOTSTRAP_ADMIN_EMAIL"));
+    const auto username = api::trim_copy(env_value("APP_BOOTSTRAP_ADMIN_USERNAME"));
+    const auto email = api::trim_copy(env_value("APP_BOOTSTRAP_ADMIN_EMAIL"));
     const auto password = env_value("APP_BOOTSTRAP_ADMIN_PASSWORD");
 
     if (username.empty() && email.empty() && password.empty()) {

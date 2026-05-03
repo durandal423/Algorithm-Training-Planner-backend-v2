@@ -7,34 +7,16 @@
 namespace admin {
 namespace {
 
-std::optional<long long> optional_long(const pqxx::field_ref field) {
-    if (field.is_null()) {
-        return std::nullopt;
-    }
-    return field.as<long long>();
-}
-
-std::string string_or_empty(const pqxx::field_ref field) {
-    if (field.is_null()) {
-        return {};
-    }
-    return field.as<std::string>();
-}
-
-AuditLog audit_log_from_row(const pqxx::row& row) {
+AuditLog audit_log_from_row(const auto& row) {
     AuditLog log;
-    log.id = row["id"].as<long long>();
-    log.actor_user_id = optional_long(row["actor_user_id"]);
-    log.action = row["action"].as<std::string>();
-    log.target_type = row["target_type"].as<std::string>();
-    log.target_id = optional_long(row["target_id"]);
-    log.metadata_json = string_or_empty(row["metadata"]);
-    log.created_at = string_or_empty(row["created_at"]);
+    log.id = row["id"].template as<long long>();
+    log.actor_user_id = row["actor_user_id"].template get<long long>();
+    log.action = row["action"].template as<std::string>();
+    log.target_type = row["target_type"].template as<std::string>();
+    log.target_id = row["target_id"].template get<long long>();
+    log.metadata_json = row["metadata"].template as<std::string>("");
+    log.created_at = row["created_at"].template as<std::string>("");
     return log;
-}
-
-AuditLog audit_log_from_row(const pqxx::row_ref& row) {
-    return audit_log_from_row(pqxx::row{row});
 }
 
 } // namespace

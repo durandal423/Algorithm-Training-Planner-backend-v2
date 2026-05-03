@@ -5,51 +5,31 @@
 namespace task {
 namespace {
 
-std::optional<long long> optional_long(const pqxx::field_ref field) {
-    if (field.is_null()) {
+nlohmann::json json_or_empty_object(const pqxx::field_ref field) {
+    return nlohmann::json::parse(field.as<std::string>("{}"));
+}
+
+std::optional<nlohmann::json> optional_json(const pqxx::field_ref field) {
+    const auto text = field.get<std::string>();
+    if (!text) {
         return std::nullopt;
     }
-    return field.as<long long>();
+    return nlohmann::json::parse(*text);
 }
 
-std::optional<std::string> optional_string(const pqxx::field_ref field) {
-    if (field.is_null()) {
-        return std::nullopt;
-    }
-    return field.as<std::string>();
-}
-
-nlohmann::json json_from_text(const pqxx::field_ref field) {
-    if (field.is_null()) {
-        return nlohmann::json::object();
-    }
-    return nlohmann::json::parse(field.as<std::string>());
-}
-
-std::optional<nlohmann::json> optional_json_from_text(const pqxx::field_ref field) {
-    if (field.is_null()) {
-        return std::nullopt;
-    }
-    return nlohmann::json::parse(field.as<std::string>());
-}
-
-Task task_from_row(const pqxx::row& row) {
+Task task_from_row(const auto& row) {
     return Task{
-        .id = row["id"].as<long long>(),
-        .type = row["type"].as<std::string>(),
-        .status = row["status"].as<std::string>(),
-        .owner_user_id = optional_long(row["owner_user_id"]),
-        .payload = json_from_text(row["payload"]),
-        .result = optional_json_from_text(row["result"]),
-        .error_message = optional_string(row["error_message"]),
-        .created_at = row["created_at"].as<std::string>(),
-        .started_at = optional_string(row["started_at"]),
-        .finished_at = optional_string(row["finished_at"])
+        .id = row["id"].template as<long long>(),
+        .type = row["type"].template as<std::string>(),
+        .status = row["status"].template as<std::string>(),
+        .owner_user_id = row["owner_user_id"].template get<long long>(),
+        .payload = json_or_empty_object(row["payload"]),
+        .result = optional_json(row["result"]),
+        .error_message = row["error_message"].template get<std::string>(),
+        .created_at = row["created_at"].template as<std::string>(),
+        .started_at = row["started_at"].template get<std::string>(),
+        .finished_at = row["finished_at"].template get<std::string>()
     };
-}
-
-Task task_from_row(const pqxx::row_ref& row) {
-    return task_from_row(pqxx::row{row});
 }
 
 constexpr auto kTaskSelect = R"SQL(
@@ -107,7 +87,7 @@ std::optional<Task> TaskRepository::getTask(
     if (!row) {
         return std::nullopt;
     }
-    return task_from_row(*row);
+    return task_from_row(row.value());
 }
 
 void TaskRepository::markRunning(long long id) const {
