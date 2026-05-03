@@ -6,9 +6,12 @@
       "HTTP_PROXY": "${localEnv:HTTP_PROXY}",
       "HTTPS_PROXY": "${localEnv:HTTPS_PROXY}",
       "NO_PROXY": "${localEnv:NO_PROXY}",
+      "USERNAME": "vscode",
       "GCC_VERSION": "12",
       "CMAKE_VERSION": "3.31.11",
-      "VCPKG_COMMIT": "c3867e714dd3a51c272826eea77267876517ed99"
+      "VCPKG_COMMIT": "80f9bcfa455e875d9c1bf7a7c6692d7e1e481061",
+      "DOCKER_GID": "995",
+      "DOCKER_GROUP": "docker-host"
     }
   },
   "workspaceFolder": "/workspace",
@@ -33,6 +36,9 @@
   },
   "postCreateCommand": "bash /workspace/.devcontainer/post-create.sh",
   "remoteUser": "vscode",
+  "runArgs": [
+    "--group-add=995"
+  ],
   "customizations": {
     "vscode": {
       "extensions": [
