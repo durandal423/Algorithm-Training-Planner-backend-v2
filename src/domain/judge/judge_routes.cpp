@@ -3,7 +3,6 @@
 #include "domain/auth/auth_http.hpp"
 #include "domain/judge/judge_repository.hpp"
 #include "domain/task/task_models.hpp"
-#include "domain/task/task_scheduler.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -128,22 +127,13 @@ RouteRegistration judgeRoutesRegistration([](App& app, runtime::ApplicationConte
 
             const nlohmann::json payload = {
                 {"problemId", problem_id},
-                {"language", submission.language}
+                {"language", submission.language},
+                {"sourceCode", submission.source_code}
             };
-            const auto task_id = context.taskScheduler().submit(
+            const auto task_id = context.taskSubmissionService().submit(
                 "judge.submission.create",
                 user.id,
-                payload,
-                [&context, submission](long long task_id) {
-                    auto& task_connection_pool = context.apiPool();
-                    judge::JudgeRepository repository{task_connection_pool};
-                    const auto id = repository.createSubmission(submission);
-                    return nlohmann::json{
-                        {"submissionTaskId", task::task_ref_for_type("judge.submission.create", task_id)},
-                        {"id", id},
-                        {"status", "queued"}
-                    };
-                }
+                payload
             );
             return api::json_response(202, {
                 {"submissionTaskId", task::task_ref_for_type("judge.submission.create", task_id)},
@@ -151,8 +141,6 @@ RouteRegistration judgeRoutesRegistration([](App& app, runtime::ApplicationConte
             });
         } catch (const auth::Unauthorized& error) {
             return api::json_response(401, {{"error", error.what()}});
-        } catch (const task::TaskQueueFull& error) {
-            return api::json_response(503, {{"error", error.what()}});
         } catch (const std::exception& error) {
             return api::json_response(400, {{"error", error.what()}});
         }

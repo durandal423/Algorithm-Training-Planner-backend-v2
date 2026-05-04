@@ -3,8 +3,7 @@
 #include "db/connection_pool.hpp"
 #include "domain/auth/auth_models.hpp"
 #include "domain/training/training_models.hpp"
-#include "domain/training/training_plan_generation_service.hpp"
-#include "domain/task/task_scheduler.hpp"
+#include "domain/task/task_submission_service.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -43,14 +42,12 @@ public:
     long long enqueuePlanGeneration(
         const auth::PublicUser& user,
         const nlohmann::json& body,
-        const task::TaskScheduler& scheduler,
-        const TrainingPlanGenerationService& generator
+        const task::TaskSubmissionService& tasks
     ) const;
     long long enqueueBruteForcePlanGeneration(
         const auth::PublicUser& user,
         const nlohmann::json& body,
-        const task::TaskScheduler& scheduler,
-        const TrainingPlanGenerationService& generator
+        const task::TaskSubmissionService& tasks
     ) const;
 
     std::vector<TrainingPlan> listPlans(long long user_id) const;

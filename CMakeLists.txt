@@ -24,21 +24,17 @@ option(TRY_CROW_ENABLE_PCH "Enable precompiled headers for faster local rebuilds
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
 add_executable(${PROJECT_NAME} 
-    src/main.cpp
+    src/apps/api_server_main.cpp
     src/api/app.hpp
     src/api/http_json.hpp
     src/api/http_json.cpp
     src/api/route_registry.hpp
     src/api/route_registry.cpp
-    src/algorithms/training_plan_algorithms.cpp
-    src/algorithms/training_plan_algorithms.hpp
-    src/concurrency/thread_pool.hpp
-    src/concurrency/thread_pool.cpp
     src/domain/task/task_models.hpp
     src/domain/task/task_repository.hpp
     src/domain/task/task_repository.cpp
-    src/domain/task/task_scheduler.hpp
-    src/domain/task/task_scheduler.cpp
+    src/domain/task/task_submission_service.hpp
+    src/domain/task/task_submission_service.cpp
     src/runtime/application_context.hpp
     src/runtime/application_context.cpp
     src/domain/task/task_routes.cpp
@@ -70,8 +66,6 @@ add_executable(${PROJECT_NAME}
     src/domain/training/training_repository.hpp
     src/domain/training/training_service.cpp
     src/domain/training/training_service.hpp
-    src/domain/training/training_plan_generation_service.cpp
-    src/domain/training/training_plan_generation_service.hpp
     src/domain/training/training_routes.cpp
     src/domain/judge/judge_models.hpp
     src/domain/judge/judge_repository.cpp
@@ -109,7 +103,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 )
 
 add_executable(Algorithm-judge-worker
-    src/judge_worker_main.cpp
+    src/apps/judge_worker_main.cpp
     src/logging/logging.hpp
     src/logging/logging.cpp
     src/db/connection_pool.cpp
@@ -150,6 +144,55 @@ target_link_libraries(Algorithm-judge-worker PRIVATE
     spdlog::spdlog
 )
 
+add_executable(Algorithm-task-worker
+    src/apps/task_worker_main.cpp
+    src/logging/logging.hpp
+    src/logging/logging.cpp
+    src/db/connection_pool.cpp
+    src/db/connection_pool.hpp
+    src/db/schema.hpp
+    src/db/schema.cpp
+    src/db/database.cpp
+    src/db/database.hpp
+    src/algorithms/training_plan_algorithms.cpp
+    src/algorithms/training_plan_algorithms.hpp
+    src/domain/task/task_models.hpp
+    src/domain/task/task_repository.hpp
+    src/domain/task/task_queue_repository.hpp
+    src/domain/task/task_queue_repository.cpp
+    src/domain/task/task_execution_context.hpp
+    src/domain/task/task_execution_context.cpp
+    src/domain/task/task_handler_registry.hpp
+    src/domain/task/task_handler_registry.cpp
+    src/domain/task/task_worker_runtime.hpp
+    src/domain/task/task_worker_runtime.cpp
+    src/domain/training/training_models.hpp
+    src/domain/training/training_repository.cpp
+    src/domain/training/training_repository.hpp
+    src/domain/training/training_plan_generation_service.cpp
+    src/domain/training/training_plan_generation_service.hpp
+    src/domain/training/training_tasks.cpp
+    src/domain/judge/judge_models.hpp
+    src/domain/judge/judge_repository.cpp
+    src/domain/judge/judge_repository.hpp
+    src/domain/judge/judge_submission_tasks.cpp
+)
+
+target_include_directories(Algorithm-task-worker PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_BINARY_DIR}
+)
+
+target_compile_features(Algorithm-task-worker PRIVATE
+    cxx_std_23
+)
+
+target_link_libraries(Algorithm-task-worker PRIVATE
+    libpqxx::pqxx
+    nlohmann_json::nlohmann_json
+    spdlog::spdlog
+)
+
 enable_testing()
 
 add_executable(project-tests
@@ -158,6 +201,7 @@ add_executable(project-tests
     tests/unit/training_plan_algorithms_test.cpp
     tests/db/auth_repository_test.cpp
     tests/db/judge_repository_queue_test.cpp
+    tests/db/task_queue_repository_test.cpp
     tests/db/task_repository_test.cpp
     src/algorithms/training_plan_algorithms.cpp
     src/algorithms/training_plan_algorithms.hpp
@@ -179,6 +223,8 @@ add_executable(project-tests
     src/domain/judge/output_comparator.hpp
     src/domain/training/training_models.hpp
     src/domain/task/task_models.hpp
+    src/domain/task/task_queue_repository.cpp
+    src/domain/task/task_queue_repository.hpp
     src/domain/task/task_repository.cpp
     src/domain/task/task_repository.hpp
 )

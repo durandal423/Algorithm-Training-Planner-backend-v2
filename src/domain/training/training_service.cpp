@@ -2,6 +2,7 @@
 
 #include "api/http_json.hpp"
 #include "config.hpp"
+#include "domain/training/training_plan_generation_service.hpp"
 #include "domain/training/training_repository.hpp"
 
 #include <optional>
@@ -77,8 +78,7 @@ long long enqueue_plan_generation(
     ConnectionPool& pool,
     const auth::PublicUser& user,
     const nlohmann::json& body,
-    const task::TaskScheduler& scheduler,
-    const TrainingPlanGenerationService& generator,
+    const task::TaskSubmissionService& tasks,
     TrainingPlanGenerationAlgorithm algorithm
 ) {
     const auto goal_id = api::required_long(body, "goalId");
@@ -90,29 +90,18 @@ long long enqueue_plan_generation(
         throw TrainingNotFound{"training goal not found"};
     }
 
-    GenerateTrainingPlanCommand command{
-        .user_id = user.id,
-        .goal_id = goal_id,
-        .include_hidden = user.role == "admin",
-        .name = name,
-        .status = status,
-        .algorithm = algorithm
-    };
-
     const nlohmann::json payload = {
         {"goalId", goal_id},
         {"name", name},
         {"status", status},
-        {"algorithm", algorithm_name(algorithm)}
+        {"algorithm", algorithm_name(algorithm)},
+        {"includeHidden", user.role == "admin"}
     };
 
-    return scheduler.submit(
+    return tasks.submit(
         task_type(algorithm),
         user.id,
-        payload,
-        [&generator, command](long long task_id) {
-            return generator.generatePlan(task_id, command);
-        }
+        payload
     );
 }
 
@@ -175,15 +164,13 @@ bool TrainingService::deleteGoal(long long id, long long user_id) const {
 long long TrainingService::enqueuePlanGeneration(
     const auth::PublicUser& user,
     const nlohmann::json& body,
-    const task::TaskScheduler& scheduler,
-    const TrainingPlanGenerationService& generator
+    const task::TaskSubmissionService& tasks
 ) const {
     return enqueue_plan_generation(
         pool_,
         user,
         body,
-        scheduler,
-        generator,
+        tasks,
         TrainingPlanGenerationAlgorithm::Optimized
     );
 }
@@ -191,15 +178,13 @@ long long TrainingService::enqueuePlanGeneration(
 long long TrainingService::enqueueBruteForcePlanGeneration(
     const auth::PublicUser& user,
     const nlohmann::json& body,
-    const task::TaskScheduler& scheduler,
-    const TrainingPlanGenerationService& generator
+    const task::TaskSubmissionService& tasks
 ) const {
     return enqueue_plan_generation(
         pool_,
         user,
         body,
-        scheduler,
-        generator,
+        tasks,
         TrainingPlanGenerationAlgorithm::BruteForce
     );
 }

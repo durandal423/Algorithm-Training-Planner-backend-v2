@@ -66,6 +66,11 @@ constexpr std::array kMigrations{
         6,
         "006_judge_queue_leases.sql",
         "index judge queue leases"
+    },
+    MigrationScript{
+        7,
+        "007_background_task_queue.sql",
+        "add durable background task queue metadata"
     }
 };
 

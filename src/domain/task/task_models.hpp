@@ -21,9 +21,6 @@ struct Task {
 };
 
 inline std::string task_ref_for_type(const std::string& type, long long id) {
-    if (type.rfind("auth.", 0) == 0) {
-        return "auth_" + std::to_string(id);
-    }
     if (type.rfind("training.", 0) == 0) {
         return "training_" + std::to_string(id);
     }
@@ -47,9 +44,7 @@ inline void to_json(nlohmann::json& json, const Task& task) {
         {"finishedAt", task.finished_at}
     };
 
-    if (task.type.rfind("auth.", 0) == 0) {
-        json["authTaskId"] = task_ref_for_type(task.type, task.id);
-    } else if (task.type.rfind("training.", 0) == 0) {
+    if (task.type.rfind("training.", 0) == 0) {
         json["trainingTaskId"] = task_ref_for_type(task.type, task.id);
     } else if (task.type.rfind("judge.submission.", 0) == 0) {
         json["submissionTaskId"] = task_ref_for_type(task.type, task.id);

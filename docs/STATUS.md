@@ -8,7 +8,10 @@
   - `sql/001_schema.sql` 创建认证、会话、题库和标签核心表。
   - `sql/003_oj_schema.sql` 创建判题、训练计划和审计表。
   - `sql/002_seed.sql` 维护题库和标签种子。
-  - `src/db/schema.cpp` 维护当前迁移 version `1, 2, 3`。
+  - `sql/005_background_tasks.sql` 创建后台任务表。
+  - `sql/006_judge_queue_leases.sql` 增强判题队列 lease 查询。
+  - `sql/007_background_task_queue.sql` 为后台任务增加 durable queue 元数据。
+  - `src/db/schema.cpp` 维护当前迁移 version `1, 2, 3, 5, 6, 7`。
   - 全新库启动时会自动检查数据库、执行迁移、验证必需表存在。
 - 认证与用户：
   - 注册、登录、当前用户、登出 API 已实现。
@@ -27,8 +30,9 @@
   - 公开查询题目和标签。
   - 管理员创建、更新、删除题目。
 - 判题系统：
-  - 用户提交 C++ 代码进入 `submissions` 队列。
-  - 独立 `try-crow-judge-worker` 进程内由 `JudgeDispatcher` 启动固定线程池。
+  - 用户提交 C++ 代码先创建 `judge.submission.create` 后台任务。
+  - 独立 `Algorithm-task-worker` 消费该任务并创建真实 `submissions` 记录。
+  - 独立 `Algorithm-judge-worker` 进程内由 `JudgeDispatcher` 启动固定线程池。
   - Judge 线程使用 `FOR UPDATE SKIP LOCKED` 抢 `queued` submission，避免重复领取。
   - Docker 判题池使用 `atp-judge-sandbox-0..N` 命名。
   - 默认 Docker 镜像为 `gcc:13`。
@@ -40,7 +44,7 @@
   - 管理员可重判提交。
 - 训练计划 API：
   - 用户可维护训练目标 CRUD。
-  - 用户可根据训练目标异步生成训练计划，接口返回 `trainingTaskId`，通过 `GET /api/tasks/<trainingTaskId>` 查询状态和结果。
+  - 用户可根据训练目标异步生成训练计划，接口返回 `trainingTaskId`，由 `Algorithm-task-worker` 执行，通过 `GET /api/tasks/<trainingTaskId>` 查询状态和结果。
   - 生成策略按标签、难度范围、可见性过滤。
   - 底层先用 `selectStableDifficultyWindow` 以双指针/滑动窗口选出稳定难度候选区间，再用 `optimizeTrainingPlanByDP` 在时间预算和目标题数约束下做动态规划选题。
   - 用户可查看训练计划列表、详情、计划项列表。
@@ -49,7 +53,7 @@
   - 新增 `src/algorithms/training_plan_algorithms.hpp/.cpp`。
   - 核心函数名为 `selectStableDifficultyWindow` 与 `optimizeTrainingPlanByDP`。
 - 测试与验证：
-  - 新增 Catch2 测试目标 `try-crow-tests`。
+  - Catch2 测试目标为 `project-tests`。
   - 测试按方向拆分到 `tests/unit`、`tests/db`、`tests/fixtures`、`tests/manual`。
   - DB 测试通过 `RUN_DB_TESTS=1` 开启。
   - 新增 P12134 / P12135 真实判题压测脚本。
@@ -95,6 +99,7 @@
 - `PUT /api/training/goals/<id>`
 - `DELETE /api/training/goals/<id>`
 - `POST /api/training/plans/generate`
+- `POST /api/training/plans/generate/bruteforce`
 - `GET /api/tasks/<taskRef>`
 - `GET /api/training/plans`
 - `GET /api/training/plans/<id>`
@@ -103,13 +108,14 @@
 
 ## 已验证
 
-- `cmake --build build -j2` 通过。
-- `./build/try-crow-tests` 通过。
-- `RUN_DB_TESTS=1 ./build/try-crow-tests` 通过。
+- `cmake --build build -j 4` 通过。
 - `ctest --test-dir build --output-on-failure` 通过。
-- `timeout 5s ./build/try-crow` 可启动到数据库迁移检查、管理员 bootstrap 检查、后台任务线程池初始化、Crow server 启动；`exit_code=124` 是 `timeout` 的预期结果。
-- `timeout 8s ./build/try-crow-judge-worker` 可启动到数据库迁移检查、Docker judge pool 初始化、JudgeDispatcher 启动；`exit_code=124` 是 `timeout` 的预期结果。
-- HTTP 冒烟验证通过：注册/登录返回 `202 authTaskId` 并可通过 `taskToken` 轮询，训练计划生成返回 `202 trainingTaskId`，任务查询可返回 `succeeded` 和生成结果。
+- `RUN_DB_TESTS=1 ctest --test-dir build -R "background task repository" --output-on-failure` 通过。
+- `RUN_DB_TESTS=1 ctest --test-dir build -R "task queue repository" --output-on-failure` 通过。
+- `Algorithm-Training-Planner-backend` 是 HTTP API server。
+- `Algorithm-task-worker` 是 durable background task worker。
+- `Algorithm-judge-worker` 是判题 worker。
+- HTTP 冒烟验证通过：注册/登录同步返回 `user/token/expiresAt`，训练计划生成返回 `202 trainingTaskId`，任务查询可返回 `succeeded` 和生成结果。
 - `tests/manual/run_judge_load_100.sh` 已完成真实判题压测：
   - 向 P12134 / P12135 写入 `codex-load-*` 测试点。
   - 提交 100 条 C++ 代码。
@@ -120,7 +126,7 @@
 
 ## 当前数据注意事项
 
-- 本地数据库 `algorithm_training_planner_v2` 已记录 `schema_migrations` version `1, 2, 3, 4, 5`。
+- 本地数据库 `algorithm_training_planner_v2` 已记录 `schema_migrations` version `1, 2, 3, 4, 5, 6, 7`。
 - Version `4` 曾用于重复题库种子迁移，文件已删除；后续新增迁移不要复用 version `4`。
 - 压测脚本会在题库中保留或更新 P12134 / P12135 的 `codex-load-*` 测试点。
 - 最近一次真实压测提交保留在数据库中，便于复查判题记录。

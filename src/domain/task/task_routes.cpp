@@ -36,14 +36,6 @@ RouteRegistration taskRoutesRegistration([](App& app, runtime::ApplicationContex
                 return api::json_response(404, {{"error", "task not found"}});
             }
 
-            if (const auto task_token = api::optional_query_string(req, "taskToken")) {
-                const auto task = context.taskRepository().getAuthTaskByToken(*id, *task_token);
-                if (!task) {
-                    return api::json_response(404, {{"error", "task not found"}});
-                }
-                return api::json_response(200, {{"task", *task}});
-            }
-
             auto& connection_pool = context.apiPool();
             const auto user = auth::requireUser(connection_pool, req);
             const auto owner_filter = user.role == "admin"

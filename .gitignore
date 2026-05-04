@@ -3,6 +3,7 @@ build/
 .cache/
 vcpkg_installed/
 .judge-work/
+try-crow-tasks/
 
 .clang-format
 .env

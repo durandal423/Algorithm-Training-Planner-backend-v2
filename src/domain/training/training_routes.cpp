@@ -74,8 +74,7 @@ RouteRegistration trainingRoutesRegistration([](App& app, runtime::ApplicationCo
             const auto task_id = service.enqueuePlanGeneration(
                 user,
                 body,
-                context.taskScheduler(),
-                context.trainingPlanGenerator()
+                context.taskSubmissionService()
             );
             const auto task_ref = task::task_ref_for_type("training.plan.generate", task_id);
             return api::json_response(202, {
@@ -86,8 +85,6 @@ RouteRegistration trainingRoutesRegistration([](App& app, runtime::ApplicationCo
             return api::json_response(401, {{"error", error.what()}});
         } catch (const training::TrainingNotFound& error) {
             return api::json_response(404, {{"error", error.what()}});
-        } catch (const task::TaskQueueFull& error) {
-            return api::json_response(503, {{"error", error.what()}});
         } catch (const std::exception& error) {
             return training_error_response(error);
         }
@@ -104,8 +101,7 @@ RouteRegistration trainingRoutesRegistration([](App& app, runtime::ApplicationCo
             const auto task_id = service.enqueueBruteForcePlanGeneration(
                 user,
                 body,
-                context.taskScheduler(),
-                context.trainingPlanGenerator()
+                context.taskSubmissionService()
             );
             const auto task_ref = task::task_ref_for_type("training.plan.generate.bruteforce", task_id);
             return api::json_response(202, {
@@ -117,8 +113,6 @@ RouteRegistration trainingRoutesRegistration([](App& app, runtime::ApplicationCo
             return api::json_response(401, {{"error", error.what()}});
         } catch (const training::TrainingNotFound& error) {
             return api::json_response(404, {{"error", error.what()}});
-        } catch (const task::TaskQueueFull& error) {
-            return api::json_response(503, {{"error", error.what()}});
         } catch (const std::exception& error) {
             return training_error_response(error);
         }

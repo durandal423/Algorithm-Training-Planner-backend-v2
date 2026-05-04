@@ -2,6 +2,8 @@
 
 本文档面向前端对接。默认服务地址为 `http://localhost:8080`，所有业务接口都返回 JSON。
 
+前端迁移重点请先看 `docs/frontend-alignment.md`，其中汇总了注册/登录同步响应、训练计划任务轮询、提交创建任务轮询等当前行为。
+
 ## 通用约定
 
 ### 认证
@@ -30,6 +32,24 @@ Authorization: Bearer <token>
 - `401`：未登录或 token 无效。
 - `403`：已登录但权限不足。
 - `404`：资源不存在或无权访问该私有资源。
+
+### 后台任务轮询
+
+训练计划生成和提交创建会返回 `202` 与任务引用，例如 `trainingTaskId` 或 `submissionTaskId`。前端使用：
+
+```http
+GET /api/tasks/<taskRef>
+Authorization: Bearer <token>
+```
+
+轮询任务状态。任务状态为：
+
+- `pending`
+- `running`
+- `succeeded`
+- `failed`
+
+`succeeded` 时读取 `task.result`；`failed` 时显示 `task.error`。注册和登录不走后台任务，直接同步返回 `user`、`token`、`expiresAt`。
 
 ### 枚举
 
@@ -364,18 +384,23 @@ Authorization: Bearer <token>
 - `displayName` 可选；为空时后端使用 `username`。
 - `password` 必填，8 到 256 字符。
 
-响应 `202`：
+响应 `201`：
 
 ```json
 {
-  "authTaskId": "auth_1",
-  "status": "pending",
-  "taskToken": "poll-token",
-  "pollUrl": "/api/tasks/auth_1?taskToken=poll-token"
+  "user": {
+    "id": 1,
+    "username": "alice",
+    "email": "alice@example.com",
+    "displayName": "Alice",
+    "role": "user",
+    "status": "active",
+    "createdAt": "2026-05-01 13:00:00+00"
+  },
+  "token": "session-token",
+  "expiresAt": "2026-05-15 13:00:00+00"
 }
 ```
-
-注册结果通过 `GET /api/tasks/<authTaskId>?taskToken=<taskToken>` 查询。任务成功后 `result` 中返回原注册响应字段：`user`、`token`、`expiresAt`。
 
 ### 登录
 
@@ -392,18 +417,23 @@ Authorization: Bearer <token>
 
 `identifier` 可以是用户名或邮箱。
 
-响应 `202`：
+响应 `200`：
 
 ```json
 {
-  "authTaskId": "auth_2",
-  "status": "pending",
-  "taskToken": "poll-token",
-  "pollUrl": "/api/tasks/auth_2?taskToken=poll-token"
+  "user": {
+    "id": 1,
+    "username": "alice",
+    "email": "alice@example.com",
+    "displayName": "Alice",
+    "role": "user",
+    "status": "active",
+    "createdAt": "2026-05-01 13:00:00+00"
+  },
+  "token": "session-token",
+  "expiresAt": "2026-05-15 13:00:00+00"
 }
 ```
-
-登录结果通过 `GET /api/tasks/<authTaskId>?taskToken=<taskToken>` 查询。任务成功后 `result` 中返回原登录响应字段：`user`、`token`、`expiresAt`。
 
 ### 当前用户
 
@@ -1062,7 +1092,7 @@ GET /api/problems?q=P12134&tag=滑动窗口&limit=20&offset=0
 
 `GET /api/tasks/<taskRef>`
 
-权限：登录用户只能查询自己的训练/提交任务；管理员可查询所有登录态任务。注册/登录任务没有登录态，需要使用创建任务时返回的 `taskToken`：`GET /api/tasks/<authTaskId>?taskToken=<taskToken>`。
+权限：登录用户只能查询自己的训练/提交任务；管理员可查询所有登录态任务。
 
 响应 `200`：
 

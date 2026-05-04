@@ -1,10 +1,8 @@
 #pragma once
 
 #include "db/connection_pool.hpp"
-#include "domain/training/training_plan_generation_service.hpp"
 #include "domain/task/task_repository.hpp"
-#include "domain/task/task_scheduler.hpp"
-#include "concurrency/thread_pool.hpp"
+#include "domain/task/task_submission_service.hpp"
 
 #include <string>
 
@@ -19,21 +17,16 @@ public:
     ApplicationContext& operator=(const ApplicationContext&) = delete;
 
     ConnectionPool& apiPool();
-    concurrency::ThreadPool& workPool();
     task::TaskRepository& taskRepository();
-    const task::TaskScheduler& taskScheduler() const;
-    const training::TrainingPlanGenerationService& trainingPlanGenerator() const;
+    const task::TaskSubmissionService& taskSubmissionService() const;
 
     void stop();
 
 private:
     ConnectionPool api_pool_;
     ConnectionPool task_pool_;
-    ConnectionPool training_pool_;
-    concurrency::ThreadPool work_pool_;
     task::TaskRepository task_repository_;
-    task::TaskScheduler task_scheduler_;
-    training::TrainingPlanGenerationService training_plan_generator_;
+    task::TaskSubmissionService task_submission_service_;
 };
 
 } // namespace runtime

@@ -58,10 +58,6 @@ public:
         long long id,
         std::optional<long long> owner_user_id
     ) const;
-    std::optional<Task> getAuthTaskByToken(
-        long long id,
-        const std::string& task_token
-    ) const;
 
     void markRunning(long long id) const;
     void markSucceeded(long long id, const nlohmann::json& result) const;
