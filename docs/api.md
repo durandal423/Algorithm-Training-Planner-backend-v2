@@ -364,15 +364,18 @@ Authorization: Bearer <token>
 - `displayName` 可选；为空时后端使用 `username`。
 - `password` 必填，8 到 256 字符。
 
-响应 `201`：
+响应 `202`：
 
 ```json
 {
-  "user": {},
-  "token": "token",
-  "expiresAt": "2026-05-15 13:00:00+00"
+  "authTaskId": "auth_1",
+  "status": "pending",
+  "taskToken": "poll-token",
+  "pollUrl": "/api/tasks/auth_1?taskToken=poll-token"
 }
 ```
+
+注册结果通过 `GET /api/tasks/<authTaskId>?taskToken=<taskToken>` 查询。任务成功后 `result` 中返回原注册响应字段：`user`、`token`、`expiresAt`。
 
 ### 登录
 
@@ -389,15 +392,18 @@ Authorization: Bearer <token>
 
 `identifier` 可以是用户名或邮箱。
 
-响应 `200`：
+响应 `202`：
 
 ```json
 {
-  "user": {},
-  "token": "token",
-  "expiresAt": "2026-05-15 13:00:00+00"
+  "authTaskId": "auth_2",
+  "status": "pending",
+  "taskToken": "poll-token",
+  "pollUrl": "/api/tasks/auth_2?taskToken=poll-token"
 }
 ```
+
+登录结果通过 `GET /api/tasks/<authTaskId>?taskToken=<taskToken>` 查询。任务成功后 `result` 中返回原登录响应字段：`user`、`token`、`expiresAt`。
 
 ### 当前用户
 
@@ -665,16 +671,16 @@ GET /api/problems?q=P12134&tag=滑动窗口&limit=20&offset=0
 - `language` 可选，当前仅支持 `cpp`。
 - `sourceCode` 必填，1 到 262144 bytes。
 
-响应 `201`：
+响应 `202`：
 
 ```json
 {
-  "id": 100,
-  "status": "queued"
+  "submissionTaskId": "submission_100",
+  "status": "pending"
 }
 ```
 
-前端建议：提交成功后用 `GET /api/submissions/<id>` 轮询，直到 `status` 为 `completed`、`failed` 或 `canceled`。
+提交创建结果通过 `GET /api/tasks/<submissionTaskId>` 查询。任务成功后 `result.id` 是真实提交 id，随后再用 `GET /api/submissions/<id>` 轮询判题状态，直到 `status` 为 `completed`、`failed` 或 `canceled`。
 
 ### 提交详情
 
@@ -1025,19 +1031,38 @@ GET /api/problems?q=P12134&tag=滑动窗口&limit=20&offset=0
 
 ```json
 {
-  "taskId": 1,
-  "task_id": 1,
+  "trainingTaskId": "training_1",
   "status": "pending"
 }
 ```
 
-生成结果通过 `GET /api/tasks/<taskId>` 查询。
+生成结果通过 `GET /api/tasks/<trainingTaskId>` 查询。
+
+### 生成训练计划（暴力对照组）
+
+`POST /api/training/plans/generate/bruteforce`
+
+权限：登录用户。
+
+请求体同 `POST /api/training/plans/generate`。
+
+响应 `202`：
+
+该接口会创建后台任务并立即返回。后台任务使用 `optimizeTrainingPlanByBruteForce` 对候选题做普通 DFS 组合枚举，用于和默认的稳定难度窗口 + DP 算法做演示对比。为避免暴力搜索拖垮后台任务，组合数量超过 `TRAINING_PLAN_MAX_BRUTE_FORCE_COMBINATIONS` 时任务会失败并在 `GET /api/tasks/<trainingTaskId>` 的 `error` 字段返回原因。
+
+```json
+{
+  "trainingTaskId": "training_2",
+  "status": "pending",
+  "algorithm": "bruteforce"
+}
+```
 
 ### 查询后台任务
 
-`GET /api/tasks/<id>`
+`GET /api/tasks/<taskRef>`
 
-权限：登录用户，只能查询自己的任务；管理员可查询所有任务。
+权限：登录用户只能查询自己的训练/提交任务；管理员可查询所有登录态任务。注册/登录任务没有登录态，需要使用创建任务时返回的 `taskToken`：`GET /api/tasks/<authTaskId>?taskToken=<taskToken>`。
 
 响应 `200`：
 
@@ -1045,7 +1070,8 @@ GET /api/problems?q=P12134&tag=滑动窗口&limit=20&offset=0
 {
   "task": {
     "id": 1,
-    "taskId": 1,
+    "taskRef": "training_1",
+    "trainingTaskId": "training_1",
     "type": "training.plan.generate",
     "status": "succeeded",
     "result": {

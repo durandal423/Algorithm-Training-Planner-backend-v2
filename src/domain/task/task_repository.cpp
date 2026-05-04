@@ -90,6 +90,28 @@ std::optional<Task> TaskRepository::getTask(
     return task_from_row(row.value());
 }
 
+std::optional<Task> TaskRepository::getAuthTaskByToken(
+    long long id,
+    const std::string& task_token
+) const {
+    auto lease = pool_.acquire();
+    pqxx::work tx{lease.connection()};
+    const auto row = tx.exec(
+        std::string{kTaskSelect} + R"SQL(
+            WHERE id = $1
+              AND owner_user_id IS NULL
+              AND type IN ('auth.register', 'auth.login')
+              AND payload ->> 'taskToken' = $2
+        )SQL",
+        pqxx::params{id, task_token}
+    ).opt_row();
+    tx.commit();
+    if (!row) {
+        return std::nullopt;
+    }
+    return task_from_row(row.value());
+}
+
 void TaskRepository::markRunning(long long id) const {
     auto lease = pool_.acquire();
     pqxx::work tx{lease.connection()};

@@ -61,6 +61,61 @@ TrainingGoal goal_from_json(
     return goal;
 }
 
+const char* algorithm_name(TrainingPlanGenerationAlgorithm algorithm) {
+    return algorithm == TrainingPlanGenerationAlgorithm::BruteForce
+        ? "bruteforce"
+        : "optimized";
+}
+
+const char* task_type(TrainingPlanGenerationAlgorithm algorithm) {
+    return algorithm == TrainingPlanGenerationAlgorithm::BruteForce
+        ? "training.plan.generate.bruteforce"
+        : "training.plan.generate";
+}
+
+long long enqueue_plan_generation(
+    ConnectionPool& pool,
+    const auth::PublicUser& user,
+    const nlohmann::json& body,
+    const task::TaskScheduler& scheduler,
+    const TrainingPlanGenerationService& generator,
+    TrainingPlanGenerationAlgorithm algorithm
+) {
+    const auto goal_id = api::required_long(body, "goalId");
+    const auto name = body.value("name", std::optional<std::string>{});
+    const auto status = body.value("status", std::string{"draft"});
+
+    TrainingRepository repository{pool};
+    if (!repository.getGoal(goal_id, user.id)) {
+        throw TrainingNotFound{"training goal not found"};
+    }
+
+    GenerateTrainingPlanCommand command{
+        .user_id = user.id,
+        .goal_id = goal_id,
+        .include_hidden = user.role == "admin",
+        .name = name,
+        .status = status,
+        .algorithm = algorithm
+    };
+
+    const nlohmann::json payload = {
+        {"goalId", goal_id},
+        {"name", name},
+        {"status", status},
+        {"algorithm", algorithm_name(algorithm)}
+    };
+
+    return scheduler.submit(
+        task_type(algorithm),
+        user.id,
+        payload,
+        [&generator, command](long long task_id) {
+            return generator.generatePlan(task_id, command);
+        }
+    );
+}
+
 } // namespace
 
 TrainingBadRequest::TrainingBadRequest(const std::string& message)
@@ -123,36 +178,29 @@ long long TrainingService::enqueuePlanGeneration(
     const task::TaskScheduler& scheduler,
     const TrainingPlanGenerationService& generator
 ) const {
-    const auto goal_id = api::required_long(body, "goalId");
-    const auto name = body.value("name", std::optional<std::string>{});
-    const auto status = body.value("status", std::string{"draft"});
+    return enqueue_plan_generation(
+        pool_,
+        user,
+        body,
+        scheduler,
+        generator,
+        TrainingPlanGenerationAlgorithm::Optimized
+    );
+}
 
-    TrainingRepository repository{pool_};
-    if (!repository.getGoal(goal_id, user.id)) {
-        throw TrainingNotFound{"training goal not found"};
-    }
-
-    GenerateTrainingPlanCommand command{
-        .user_id = user.id,
-        .goal_id = goal_id,
-        .include_hidden = user.role == "admin",
-        .name = name,
-        .status = status
-    };
-
-    const nlohmann::json payload = {
-        {"goalId", goal_id},
-        {"name", name},
-        {"status", status}
-    };
-
-    return scheduler.submit(
-        "training.plan.generate",
-        user.id,
-        payload,
-        [&generator, command](long long task_id) {
-            return generator.generatePlan(task_id, command);
-        }
+long long TrainingService::enqueueBruteForcePlanGeneration(
+    const auth::PublicUser& user,
+    const nlohmann::json& body,
+    const task::TaskScheduler& scheduler,
+    const TrainingPlanGenerationService& generator
+) const {
+    return enqueue_plan_generation(
+        pool_,
+        user,
+        body,
+        scheduler,
+        generator,
+        TrainingPlanGenerationAlgorithm::BruteForce
     );
 }
 

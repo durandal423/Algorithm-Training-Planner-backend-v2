@@ -160,4 +160,10 @@ struct OptimizedTrainingPlan {
     std::vector<std::string> uncovered_tags;
 };
 
+struct BruteForceTrainingPlan {
+    OptimizedTrainingPlan optimized;
+    long long evaluated_combination_count{};
+    int considered_candidate_count{};
+};
+
 } // namespace training

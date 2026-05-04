@@ -19,6 +19,7 @@ public:
     ApplicationContext& operator=(const ApplicationContext&) = delete;
 
     ConnectionPool& apiPool();
+    concurrency::ThreadPool& workPool();
     task::TaskRepository& taskRepository();
     const task::TaskScheduler& taskScheduler() const;
     const training::TrainingPlanGenerationService& trainingPlanGenerator() const;
@@ -29,7 +30,7 @@ private:
     ConnectionPool api_pool_;
     ConnectionPool task_pool_;
     ConnectionPool training_pool_;
-    concurrency::ThreadPool background_pool_;
+    concurrency::ThreadPool work_pool_;
     task::TaskRepository task_repository_;
     task::TaskScheduler task_scheduler_;
     training::TrainingPlanGenerationService training_plan_generator_;

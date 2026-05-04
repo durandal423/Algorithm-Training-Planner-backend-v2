@@ -8,13 +8,13 @@ ApplicationContext::ApplicationContext(const std::string& app_conninfo)
     : api_pool_{app_conninfo},
       task_pool_{app_conninfo, config::TASK_CONNECTION_POOL_MAX_SIZE},
       training_pool_{app_conninfo, config::TRAINING_CONNECTION_POOL_MAX_SIZE},
-      background_pool_{
-          "background-tasks",
+      work_pool_{
+          "general-work",
           config::BACKGROUND_TASK_THREAD_COUNT,
           config::BACKGROUND_TASK_QUEUE_CAPACITY
       },
       task_repository_{task_pool_},
-      task_scheduler_{task_repository_, background_pool_},
+      task_scheduler_{task_repository_, work_pool_},
       training_plan_generator_{training_pool_} {}
 
 ApplicationContext::~ApplicationContext() {
@@ -23,6 +23,10 @@ ApplicationContext::~ApplicationContext() {
 
 ConnectionPool& ApplicationContext::apiPool() {
     return api_pool_;
+}
+
+concurrency::ThreadPool& ApplicationContext::workPool() {
+    return work_pool_;
 }
 
 task::TaskRepository& ApplicationContext::taskRepository() {
@@ -38,7 +42,7 @@ const training::TrainingPlanGenerationService& ApplicationContext::trainingPlanG
 }
 
 void ApplicationContext::stop() {
-    background_pool_.stop();
+    work_pool_.stop();
 }
 
 } // namespace runtime

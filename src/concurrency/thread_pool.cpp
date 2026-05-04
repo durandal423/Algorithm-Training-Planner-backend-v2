@@ -41,12 +41,26 @@ ThreadPool::~ThreadPool() {
 }
 
 bool ThreadPool::trySubmit(std::function<void()> task) {
+    return trySubmit("default", std::move(task));
+}
+
+bool ThreadPool::trySubmit(std::string lane, std::function<void()> task) {
+    if (lane.empty()) {
+        lane = "default";
+    }
+
     {
         std::lock_guard lock{mutex_};
-        if (stopping_ || tasks_.size() >= queue_capacity_) {
+        if (stopping_ || queued_count_ >= queue_capacity_) {
             return false;
         }
-        tasks_.push_back(std::move(task));
+
+        auto [iter, inserted] = tasks_by_lane_.try_emplace(lane);
+        if (inserted) {
+            lanes_.push_back(std::move(lane));
+        }
+        iter->second.push_back(std::move(task));
+        ++queued_count_;
     }
 
     available_cv_.notify_one();
@@ -78,15 +92,31 @@ void ThreadPool::workerLoop(std::size_t worker_index) {
         {
             std::unique_lock lock{mutex_};
             available_cv_.wait(lock, [&] {
-                return stopping_ || !tasks_.empty();
+                return stopping_ || queued_count_ > 0;
             });
 
-            if (stopping_ && tasks_.empty()) {
+            if (stopping_ && queued_count_ == 0) {
                 return;
             }
 
-            task = std::move(tasks_.front());
-            tasks_.pop_front();
+            const auto lane_count = lanes_.size();
+            for (std::size_t checked = 0; checked < lane_count; ++checked) {
+                const auto lane_index = (next_lane_index_ + checked) % lane_count;
+                auto iter = tasks_by_lane_.find(lanes_[lane_index]);
+                if (iter == tasks_by_lane_.end() || iter->second.empty()) {
+                    continue;
+                }
+
+                task = std::move(iter->second.front());
+                iter->second.pop_front();
+                --queued_count_;
+                next_lane_index_ = (lane_index + 1) % lane_count;
+                break;
+            }
+        }
+
+        if (!task) {
+            continue;
         }
 
         try {

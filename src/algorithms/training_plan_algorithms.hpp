@@ -16,6 +16,11 @@ OptimizedTrainingPlan optimizeTrainingPlanByDP(
     const TrainingGoal& goal
 );
 
+BruteForceTrainingPlan optimizeTrainingPlanByBruteForce(
+    const std::vector<TrainingProblemCandidate>& candidates,
+    const TrainingGoal& goal
+);
+
 int scoreProblemForTrainingGoal(
     const TrainingProblemCandidate& candidate,
     const TrainingGoal& goal,

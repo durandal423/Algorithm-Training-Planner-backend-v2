@@ -46,6 +46,12 @@ public:
         const task::TaskScheduler& scheduler,
         const TrainingPlanGenerationService& generator
     ) const;
+    long long enqueueBruteForcePlanGeneration(
+        const auth::PublicUser& user,
+        const nlohmann::json& body,
+        const task::TaskScheduler& scheduler,
+        const TrainingPlanGenerationService& generator
+    ) const;
 
     std::vector<TrainingPlan> listPlans(long long user_id) const;
     std::optional<TrainingPlanDetail> getPlanDetail(long long id, long long user_id) const;

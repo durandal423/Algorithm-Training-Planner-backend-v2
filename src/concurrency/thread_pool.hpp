@@ -7,6 +7,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 namespace concurrency {
@@ -20,6 +21,7 @@ public:
     ThreadPool& operator=(const ThreadPool&) = delete;
 
     bool trySubmit(std::function<void()> task);
+    bool trySubmit(std::string lane, std::function<void()> task);
     void stop();
 
 private:
@@ -27,11 +29,14 @@ private:
 
     std::string name_;
     std::size_t queue_capacity_{};
+    std::size_t queued_count_{0};
+    std::size_t next_lane_index_{0};
     bool stopping_{false};
 
     std::mutex mutex_;
     std::condition_variable available_cv_;
-    std::deque<std::function<void()>> tasks_;
+    std::vector<std::string> lanes_;
+    std::unordered_map<std::string, std::deque<std::function<void()>>> tasks_by_lane_;
     std::vector<std::thread> workers_;
 };
 

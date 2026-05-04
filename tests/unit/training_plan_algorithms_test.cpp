@@ -76,3 +76,24 @@ TEST_CASE("optimizeTrainingPlanByDP respects time and count budgets") {
         REQUIRE(item.selected_reason.find("DP") != std::string::npos);
     }
 }
+
+TEST_CASE("optimizeTrainingPlanByBruteForce enumerates feasible combinations") {
+    const std::vector<training::TrainingProblemCandidate> candidates = {
+        candidate(1, 1000, 20, {"动态规划"}),
+        candidate(2, 1050, 20, {"双指针"}, 1),
+        candidate(3, 1100, 45, {"动态规划", "双指针"}),
+        candidate(4, 1150, 20, {"贪心"})
+    };
+
+    const auto selected_goal = goal();
+    const auto brute_force = training::optimizeTrainingPlanByBruteForce(candidates, selected_goal);
+
+    REQUIRE(brute_force.considered_candidate_count == 4);
+    REQUIRE(brute_force.evaluated_combination_count > 0);
+    REQUIRE(brute_force.optimized.items.size() == 2);
+    REQUIRE(brute_force.optimized.total_estimated_minutes <= selected_goal.time_budget_minutes);
+    REQUIRE(brute_force.optimized.covered_tags.size() == 2);
+    for (const auto& item : brute_force.optimized.items) {
+        REQUIRE(item.selected_reason.find("暴力枚举") != std::string::npos);
+    }
+}

@@ -2,6 +2,8 @@
 #include "api/http_json.hpp"
 #include "domain/auth/auth_http.hpp"
 #include "domain/judge/judge_repository.hpp"
+#include "domain/task/task_models.hpp"
+#include "domain/task/task_scheduler.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -124,11 +126,33 @@ RouteRegistration judgeRoutesRegistration([](App& app, runtime::ApplicationConte
             submission.language = body.value("language", std::string{"cpp"});
             submission.source_code = source_code;
 
-            judge::JudgeRepository repository{connection_pool};
-            const auto id = repository.createSubmission(submission);
-            return api::json_response(201, {{"id", id}, {"status", "queued"}});
+            const nlohmann::json payload = {
+                {"problemId", problem_id},
+                {"language", submission.language}
+            };
+            const auto task_id = context.taskScheduler().submit(
+                "judge.submission.create",
+                user.id,
+                payload,
+                [&context, submission](long long task_id) {
+                    auto& task_connection_pool = context.apiPool();
+                    judge::JudgeRepository repository{task_connection_pool};
+                    const auto id = repository.createSubmission(submission);
+                    return nlohmann::json{
+                        {"submissionTaskId", task::task_ref_for_type("judge.submission.create", task_id)},
+                        {"id", id},
+                        {"status", "queued"}
+                    };
+                }
+            );
+            return api::json_response(202, {
+                {"submissionTaskId", task::task_ref_for_type("judge.submission.create", task_id)},
+                {"status", "pending"}
+            });
         } catch (const auth::Unauthorized& error) {
             return api::json_response(401, {{"error", error.what()}});
+        } catch (const task::TaskQueueFull& error) {
+            return api::json_response(503, {{"error", error.what()}});
         } catch (const std::exception& error) {
             return api::json_response(400, {{"error", error.what()}});
         }

@@ -16,13 +16,14 @@ inline constexpr int CONNECTION_POOL_MAX_SIZE = 16;
 inline constexpr int CONNECTION_POOL_IDLE_TIMEOUT_MINUTES = 10;
 inline constexpr int TASK_CONNECTION_POOL_MAX_SIZE = 4;
 inline constexpr int TRAINING_CONNECTION_POOL_MAX_SIZE = 2;
-inline constexpr int BACKGROUND_TASK_THREAD_COUNT = 4;
-inline constexpr int BACKGROUND_TASK_QUEUE_CAPACITY = 512;
+inline constexpr int BACKGROUND_TASK_THREAD_COUNT = 12;
+inline constexpr int BACKGROUND_TASK_QUEUE_CAPACITY = 4096;
 
 inline constexpr int TRAINING_GOAL_MAX_TARGET_COUNT = 30;
 inline constexpr int TRAINING_GOAL_MAX_TIME_BUDGET_MINUTES = 480;
 inline constexpr int TRAINING_GOAL_MAX_TAGS = 20;
 inline constexpr int TRAINING_PLAN_MAX_DP_STATES = 5000000;
+inline constexpr int TRAINING_PLAN_MAX_BRUTE_FORCE_COMBINATIONS = 2000000;
 
 inline constexpr char JUDGE_DOCKER_POOL_NAME_PREFIX[] = "atp-judge-sandbox";
 inline constexpr char JUDGE_DOCKER_WORK_ROOT[] = "@CMAKE_SOURCE_DIR@/.judge-work";

@@ -9,12 +9,18 @@
 
 namespace training {
 
+enum class TrainingPlanGenerationAlgorithm {
+    Optimized,
+    BruteForce
+};
+
 struct GenerateTrainingPlanCommand {
     long long user_id{};
     long long goal_id{};
     bool include_hidden{};
     std::optional<std::string> name;
     std::string status{"draft"};
+    TrainingPlanGenerationAlgorithm algorithm{TrainingPlanGenerationAlgorithm::Optimized};
 };
 
 class TrainingPlanGenerationService final {

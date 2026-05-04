@@ -40,7 +40,7 @@
   - 管理员可重判提交。
 - 训练计划 API：
   - 用户可维护训练目标 CRUD。
-  - 用户可根据训练目标异步生成训练计划，接口返回 `taskId`，通过 `GET /api/tasks/<id>` 查询状态和结果。
+  - 用户可根据训练目标异步生成训练计划，接口返回 `trainingTaskId`，通过 `GET /api/tasks/<trainingTaskId>` 查询状态和结果。
   - 生成策略按标签、难度范围、可见性过滤。
   - 底层先用 `selectStableDifficultyWindow` 以双指针/滑动窗口选出稳定难度候选区间，再用 `optimizeTrainingPlanByDP` 在时间预算和目标题数约束下做动态规划选题。
   - 用户可查看训练计划列表、详情、计划项列表。
@@ -95,7 +95,7 @@
 - `PUT /api/training/goals/<id>`
 - `DELETE /api/training/goals/<id>`
 - `POST /api/training/plans/generate`
-- `GET /api/tasks/<id>`
+- `GET /api/tasks/<taskRef>`
 - `GET /api/training/plans`
 - `GET /api/training/plans/<id>`
 - `GET /api/training/plans/<id>/items`
@@ -109,7 +109,7 @@
 - `ctest --test-dir build --output-on-failure` 通过。
 - `timeout 5s ./build/try-crow` 可启动到数据库迁移检查、管理员 bootstrap 检查、后台任务线程池初始化、Crow server 启动；`exit_code=124` 是 `timeout` 的预期结果。
 - `timeout 8s ./build/try-crow-judge-worker` 可启动到数据库迁移检查、Docker judge pool 初始化、JudgeDispatcher 启动；`exit_code=124` 是 `timeout` 的预期结果。
-- HTTP 冒烟验证通过：注册临时用户、创建训练目标、`POST /api/training/plans/generate` 返回 `202 taskId`、`GET /api/tasks/<id>` 返回 `succeeded` 和生成的 plan/items。
+- HTTP 冒烟验证通过：注册/登录返回 `202 authTaskId` 并可通过 `taskToken` 轮询，训练计划生成返回 `202 trainingTaskId`，任务查询可返回 `succeeded` 和生成结果。
 - `tests/manual/run_judge_load_100.sh` 已完成真实判题压测：
   - 向 P12134 / P12135 写入 `codex-load-*` 测试点。
   - 提交 100 条 C++ 代码。
