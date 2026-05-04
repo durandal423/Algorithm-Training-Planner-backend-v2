@@ -35,14 +35,23 @@ std::vector<ProblemSummary> ProblemRepository::listProblems(const ProblemFilter&
     const int limit = std::clamp(filter.limit, 1, 200);
     const int offset = std::max(0, filter.offset);
     const auto rows = tx.exec(
-        std::string{kProblemSummarySelect} + R"SQL(
+        R"SQL(
+            WITH tag_filter AS (
+                SELECT trim(value) AS value
+                FROM unnest(string_to_array($3, ',')) AS value
+                WHERE trim(value) <> ''
+            )
+        )SQL" + std::string{kProblemSummarySelect} + R"SQL(
             WHERE ($1 OR visibility = 'public')
               AND ($2 = '' OR code ILIKE '%' || $2 || '%' OR title ILIKE '%' || $2 || '%')
-              AND ($3 = '' OR EXISTS (
+              AND (NOT EXISTS (SELECT 1 FROM tag_filter) OR EXISTS (
                     SELECT 1
                     FROM problem_tags pt
                     JOIN tags t ON t.id = pt.tag_id
-                    WHERE pt.problem_id = problems.id AND lower(t.name) = lower($3)
+                    JOIN tag_filter tf
+                      ON lower(t.name) = lower(tf.value)
+                      OR t.id::text = tf.value
+                    WHERE pt.problem_id = problems.id
               ))
               AND ($4::integer IS NULL OR difficulty >= $4)
               AND ($5::integer IS NULL OR difficulty <= $5)

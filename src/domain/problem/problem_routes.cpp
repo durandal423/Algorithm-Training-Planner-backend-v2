@@ -48,6 +48,8 @@ RouteRegistration problemRoutesRegistration([](App& app, runtime::ApplicationCon
         }
         if (const char* tag = req.url_params.get("tag")) {
             filter.tag = tag;
+        } else if (const char* tags = req.url_params.get("tags")) {
+            filter.tag = tags;
         }
         if (const auto limit = api::optional_query_int(req, "limit")) {
             filter.limit = *limit;

@@ -157,3 +157,103 @@ FROM mapping
 JOIN problems p ON p.code = mapping.problem_code
 JOIN tags t ON t.name = mapping.tag_name
 ON CONFLICT DO NOTHING;
+
+-- Synthetic practice bank: keep hand-written examples above, then fill T0033..T1000
+-- with deterministic generated rows so local/dev seed data has enough volume for
+-- recommendation, pagination, and training-plan experiments.
+WITH generated_problem_seed AS (
+    SELECT
+        'T' || lpad(series.n::text, 4, '0') AS code,
+        vocab.title_prefixes[((series.n - 1) % array_length(vocab.title_prefixes, 1)) + 1] ||
+            ' ' || lpad(series.n::text, 4, '0') AS title,
+        vocab.platforms[((series.n - 1) % array_length(vocab.platforms, 1)) + 1] AS source_platform,
+        'https://example.com/problems/T' || lpad(series.n::text, 4, '0') AS source_url,
+        800 + ((series.n * 137) % 1501) AS difficulty,
+        15 + ((series.n * 7) % 51) AS estimated_minutes,
+        '自动生成的训练题，侧重' ||
+            vocab.tags[((series.n - 1) % array_length(vocab.tags, 1)) + 1] ||
+            '、' ||
+            vocab.tags[((series.n + 3) % array_length(vocab.tags, 1)) + 1] ||
+            '与基础建模。' AS description
+    FROM generate_series(33, 1000) AS series(n)
+    CROSS JOIN (
+        SELECT
+            ARRAY[
+                '区间维护训练',
+                '序列统计复盘',
+                '路径选择练习',
+                '最优分组计划',
+                '网格推演任务',
+                '集合覆盖挑战',
+                '子数组分析题',
+                '计数方案练习',
+                '树形关系整理',
+                '连通块检查',
+                '窗口约束判断',
+                '答案搜索模板',
+                '有序结构维护',
+                '图上状态转移',
+                '前缀信息查询',
+                '组合枚举剪枝',
+                '贪心交换验证',
+                '哈希频次统计',
+                '位集状态规划',
+                '差分区间更新',
+                '拓扑顺序安排',
+                '最短代价求解',
+                '双端选择问题',
+                '模运算计数题',
+                '离散化查询题',
+                '多阶段决策题',
+                '候选窗口筛选',
+                '弱项标签强化'
+            ]::text[] AS title_prefixes,
+            ARRAY['洛谷', 'LeetCode', 'Codeforces', '蓝桥杯', 'AtCoder', '牛客']::text[] AS platforms,
+            ARRAY[
+                '双指针',
+                '滑动窗口',
+                '动态规划',
+                '贪心',
+                '图论',
+                '搜索',
+                '数论',
+                '数据结构',
+                '状态压缩',
+                '排序',
+                '哈希表',
+                '连通性',
+                '前缀和',
+                '二分'
+            ]::text[] AS tags
+    ) AS vocab
+)
+INSERT INTO problems(
+    code, title, source_platform, source_url, difficulty, estimated_minutes,
+    description, input_format, output_format, sample_input, sample_output, visibility
+)
+SELECT
+    code,
+    title,
+    source_platform,
+    source_url,
+    difficulty,
+    estimated_minutes,
+    description,
+    NULL::text,
+    NULL::text,
+    NULL::text,
+    NULL::text,
+    'public'
+FROM generated_problem_seed
+ON CONFLICT (code) DO UPDATE SET
+    title = EXCLUDED.title,
+    source_platform = EXCLUDED.source_platform,
+    source_url = EXCLUDED.source_url,
+    difficulty = EXCLUDED.difficulty,
+    estimated_minutes = EXCLUDED.estimated_minutes,
+    description = EXCLUDED.description,
+    input_format = EXCLUDED.input_format,
+    output_format = EXCLUDED.output_format,
+    sample_input = EXCLUDED.sample_input,
+    sample_output = EXCLUDED.sample_output,
+    visibility = EXCLUDED.visibility;

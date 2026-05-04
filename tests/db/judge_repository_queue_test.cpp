@@ -91,6 +91,87 @@ TEST_CASE("fetchNextQueuedSubmission does not hand out the same job twice") {
     REQUIRE_FALSE(repository.fetchNextQueuedSubmission("extra-worker").has_value());
 }
 
+TEST_CASE("judge config upsert can be read back by problem id") {
+    if (!test_support::dbTestsEnabled()) {
+        SUCCEED("Set RUN_DB_TESTS=1 to run PostgreSQL judge repository tests.");
+        return;
+    }
+
+    test_support::ensureDatabaseReady();
+    const auto code = test_support::uniqueName("DB_JUDGE_CONFIG_");
+    struct Cleanup {
+        std::string code;
+        ~Cleanup() {
+            try {
+                test_support::deleteProblemByCode(code);
+            } catch (...) {
+            }
+        }
+    } cleanup{code};
+
+    const auto problem_id = create_problem(code);
+    ConnectionPool pool{Database::appConninfo(), 4};
+    judge::JudgeRepository repository{pool};
+
+    judge::JudgeConfig config;
+    config.problem_id = problem_id;
+    config.enabled = true;
+    config.language = "cpp";
+    config.compile_command_template = "g++ -std=c++17 main.cpp -o main";
+    config.run_command_template = "./main";
+    config.time_limit_ms = 1500;
+    config.memory_limit_mb = 128;
+    config.output_limit_kb = 2048;
+    config.compare_mode = "exact";
+    config.float_epsilon = 1e-5;
+
+    const auto saved = repository.upsertConfig(config);
+    REQUIRE(saved.problem_id == problem_id);
+    REQUIRE(saved.enabled);
+
+    const auto loaded = repository.getConfig(problem_id);
+    REQUIRE(loaded.has_value());
+    REQUIRE(loaded->problem_id == problem_id);
+    REQUIRE(loaded->enabled);
+    REQUIRE(loaded->language == "cpp");
+    REQUIRE(loaded->compile_command_template == config.compile_command_template);
+    REQUIRE(loaded->run_command_template == config.run_command_template);
+    REQUIRE(loaded->time_limit_ms == 1500);
+    REQUIRE(loaded->memory_limit_mb == 128);
+    REQUIRE(loaded->output_limit_kb == 2048);
+    REQUIRE(loaded->compare_mode == "exact");
+    REQUIRE(loaded->float_epsilon == config.float_epsilon);
+}
+
+TEST_CASE("seeded sample problems have enabled judge configs and test cases") {
+    if (!test_support::dbTestsEnabled()) {
+        SUCCEED("Set RUN_DB_TESTS=1 to run PostgreSQL judge repository tests.");
+        return;
+    }
+
+    test_support::ensureDatabaseReady();
+    ConnectionPool pool{Database::appConninfo(), 4};
+    judge::JudgeRepository repository{pool};
+
+    pqxx::connection conn{Database::appConninfo()};
+    pqxx::work tx{conn};
+    const auto rows = tx.exec(R"SQL(
+        SELECT id, code
+        FROM problems
+        WHERE code IN ('P12134', 'P12135')
+        ORDER BY code
+    )SQL");
+    REQUIRE(rows.size() == 2);
+    for (const auto& row : rows) {
+        const auto problem_id = row["id"].as<long long>();
+        const auto config = repository.getConfig(problem_id);
+        REQUIRE(config.has_value());
+        REQUIRE(config->enabled);
+        REQUIRE(repository.listJudgingTestCases(problem_id).size() >= 4);
+    }
+    tx.commit();
+}
+
 TEST_CASE("submission completion requires the owning judge worker lease") {
     if (!test_support::dbTestsEnabled()) {
         SUCCEED("Set RUN_DB_TESTS=1 to run PostgreSQL judge queue tests.");

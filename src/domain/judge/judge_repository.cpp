@@ -71,7 +71,6 @@ JudgeConfig JudgeRepository::upsertConfig(const JudgeConfig& config) const {
                       output_limit_kb, compare_mode, float_epsilon
         )SQL",
         pqxx::params{
-            tx,
             config.problem_id,
             config.enabled,
             config.language,

@@ -337,7 +337,33 @@ Authorization: Bearer <token>
   "candidateCount": 20,
   "selectedCount": 8,
   "totalEstimatedMinutes": 175,
-  "algorithmSummary": "selectStableDifficultyWindow: two-pointer stable difficulty window [1200, 1700], span=500, windowCandidates=12; optimizeTrainingPlanByDP: 0/1 knapsack by time budget and target count, totalScore=574",
+  "algorithmSummary": {
+    "algorithm": "dp",
+    "totalElapsedMicroseconds": 18432,
+    "candidateWindow": {
+      "leftIndex": 1,
+      "rightIndex": 12,
+      "leftDifficulty": 1000,
+      "rightDifficulty": 1700,
+      "difficultySpan": 700,
+      "candidateCount": 12,
+      "wrongProblemCount": 2,
+      "weakTagHitCount": 5,
+      "coverageRatio": 0.75,
+      "coveredTags": ["动态规划", "滑动窗口"],
+      "uncoveredTags": ["图论"],
+      "elapsedMicroseconds": 3210
+    },
+    "optimizationResult": {
+      "selectedCount": 8,
+      "totalEstimatedMinutes": 175,
+      "totalScore": 574,
+      "coveredTagMask": 7,
+      "coveredTags": ["动态规划", "滑动窗口"],
+      "uncoveredTags": ["图论"],
+      "elapsedMicroseconds": 15222
+    }
+  },
   "createdAt": "2026-05-01 13:00:00+00"
 }
 ```
@@ -353,6 +379,7 @@ Authorization: Bearer <token>
   "estimatedMinutes": 25,
   "score": 234,
   "selectedReason": "双指针稳定窗口候选；DP最优转移选中；覆盖目标标签=双指针,滑动窗口；score=145",
+  "tags": ["双指针", "滑动窗口"],
   "status": "not_started",
   "lastSubmissionId": null,
   "lastVerdict": null,
@@ -1068,6 +1095,8 @@ GET /api/problems?q=P12134&tag=滑动窗口&limit=20&offset=0
 
 生成结果通过 `GET /api/tasks/<trainingTaskId>` 查询。
 
+任务成功后，`task.result.plan.algorithmSummary` 会返回结构化耗时与选题摘要；`task.result.items[*].tags` 会返回所选题目的标签数组。
+
 ### 生成训练计划（暴力对照组）
 
 `POST /api/training/plans/generate/bruteforce`
@@ -1078,7 +1107,7 @@ GET /api/problems?q=P12134&tag=滑动窗口&limit=20&offset=0
 
 响应 `202`：
 
-该接口会创建后台任务并立即返回。后台任务使用 `optimizeTrainingPlanByBruteForce` 对候选题做普通 DFS 组合枚举，用于和默认的稳定难度窗口 + DP 算法做演示对比。为避免暴力搜索拖垮后台任务，组合数量超过 `TRAINING_PLAN_MAX_BRUTE_FORCE_COMBINATIONS` 时任务会失败并在 `GET /api/tasks/<trainingTaskId>` 的 `error` 字段返回原因。
+该接口会创建后台任务并立即返回。后台任务使用无组合数量上限的对照组搜索生成计划，用于和默认的稳定难度窗口 + DP 算法做演示对比。
 
 ```json
 {
@@ -1087,6 +1116,8 @@ GET /api/problems?q=P12134&tag=滑动窗口&limit=20&offset=0
   "algorithm": "bruteforce"
 }
 ```
+
+暴力对照组完成后，`algorithmSummary` 的结构与默认算法一致，差异是 `algorithm` 为 `bruteforce`，`candidateWindow` 为 `null`，`optimizationResult` 会额外包含 `combinationsEvaluated` 和 `combinationLimit`；当前无组合数量上限时 `combinationLimit` 为 `null`。
 
 ### 查询后台任务
 
@@ -1105,8 +1136,59 @@ GET /api/problems?q=P12134&tag=滑动窗口&limit=20&offset=0
     "type": "training.plan.generate",
     "status": "succeeded",
     "result": {
-      "plan": {},
-      "items": []
+      "trainingTaskId": "training_1",
+      "plan": {
+        "id": 12,
+        "name": "第 1 周训练",
+        "status": "draft",
+        "candidateCount": 20,
+        "selectedCount": 8,
+        "totalEstimatedMinutes": 175,
+        "algorithmSummary": {
+          "algorithm": "dp",
+          "totalElapsedMicroseconds": 18432,
+          "candidateWindow": {
+            "leftIndex": 1,
+            "rightIndex": 12,
+            "leftDifficulty": 1000,
+            "rightDifficulty": 1700,
+            "difficultySpan": 700,
+            "candidateCount": 12,
+            "wrongProblemCount": 2,
+            "weakTagHitCount": 5,
+            "coverageRatio": 0.75,
+            "coveredTags": ["动态规划", "滑动窗口"],
+            "uncoveredTags": ["图论"],
+            "elapsedMicroseconds": 3210
+          },
+          "optimizationResult": {
+            "selectedCount": 8,
+            "totalEstimatedMinutes": 175,
+            "totalScore": 574,
+            "coveredTagMask": 7,
+            "coveredTags": ["动态规划", "滑动窗口"],
+            "uncoveredTags": ["图论"],
+            "elapsedMicroseconds": 15222
+          }
+        },
+        "createdAt": "2026-05-03 06:18:18.342557+00"
+      },
+      "items": [
+        {
+          "id": 1,
+          "planId": 12,
+          "problemId": 10,
+          "orderIndex": 1,
+          "estimatedMinutes": 25,
+          "score": 234,
+          "selectedReason": "双指针稳定窗口候选；DP最优转移选中；覆盖目标标签=双指针,滑动窗口；score=145",
+          "tags": ["双指针", "滑动窗口"],
+          "status": "not_started",
+          "lastSubmissionId": null,
+          "lastVerdict": null,
+          "updatedAt": "2026-05-03 06:18:18.342557+00"
+        }
+      ]
     },
     "error": null,
     "createdAt": "2026-05-03 06:18:18.267515+00",
@@ -1140,8 +1222,58 @@ GET /api/problems?q=P12134&tag=滑动窗口&limit=20&offset=0
 
 ```json
 {
-  "plan": {},
-  "items": []
+  "plan": {
+    "id": 12,
+    "name": "第 1 周训练",
+    "status": "draft",
+    "candidateCount": 20,
+    "selectedCount": 8,
+    "totalEstimatedMinutes": 175,
+    "algorithmSummary": {
+      "algorithm": "dp",
+      "totalElapsedMicroseconds": 18432,
+      "candidateWindow": {
+        "leftIndex": 1,
+        "rightIndex": 12,
+        "leftDifficulty": 1000,
+        "rightDifficulty": 1700,
+        "difficultySpan": 700,
+        "candidateCount": 12,
+        "wrongProblemCount": 2,
+        "weakTagHitCount": 5,
+        "coverageRatio": 0.75,
+        "coveredTags": ["动态规划", "滑动窗口"],
+        "uncoveredTags": ["图论"],
+        "elapsedMicroseconds": 3210
+      },
+      "optimizationResult": {
+        "selectedCount": 8,
+        "totalEstimatedMinutes": 175,
+        "totalScore": 574,
+        "coveredTagMask": 7,
+        "coveredTags": ["动态规划", "滑动窗口"],
+        "uncoveredTags": ["图论"],
+        "elapsedMicroseconds": 15222
+      }
+    },
+    "createdAt": "2026-05-03 06:18:18.342557+00"
+  },
+  "items": [
+    {
+      "id": 1,
+      "planId": 12,
+      "problemId": 10,
+      "orderIndex": 1,
+      "estimatedMinutes": 25,
+      "score": 234,
+      "selectedReason": "双指针稳定窗口候选；DP最优转移选中；覆盖目标标签=双指针,滑动窗口；score=145",
+      "tags": ["双指针", "滑动窗口"],
+      "status": "not_started",
+      "lastSubmissionId": null,
+      "lastVerdict": null,
+      "updatedAt": "2026-05-03 06:18:18.342557+00"
+    }
+  ]
 }
 ```
 
@@ -1155,7 +1287,22 @@ GET /api/problems?q=P12134&tag=滑动窗口&limit=20&offset=0
 
 ```json
 {
-  "items": []
+  "items": [
+    {
+      "id": 1,
+      "planId": 12,
+      "problemId": 10,
+      "orderIndex": 1,
+      "estimatedMinutes": 25,
+      "score": 234,
+      "selectedReason": "双指针稳定窗口候选；DP最优转移选中；覆盖目标标签=双指针,滑动窗口；score=145",
+      "tags": ["双指针", "滑动窗口"],
+      "status": "not_started",
+      "lastSubmissionId": null,
+      "lastVerdict": null,
+      "updatedAt": "2026-05-03 06:18:18.342557+00"
+    }
+  ]
 }
 ```
 

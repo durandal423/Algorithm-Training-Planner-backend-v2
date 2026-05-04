@@ -11,7 +11,8 @@
   - `sql/005_background_tasks.sql` 创建后台任务表。
   - `sql/006_judge_queue_leases.sql` 增强判题队列 lease 查询。
   - `sql/007_background_task_queue.sql` 为后台任务增加 durable queue 元数据。
-  - `src/db/schema.cpp` 维护当前迁移 version `1, 2, 3, 5, 6, 7`。
+  - `sql/008_seed_generated_problem_tags.sql` 回填自动生成训练题的标签关联。
+  - `src/db/schema.cpp` 维护当前迁移 version `1, 2, 3, 5, 6, 7, 8`。
   - 全新库启动时会自动检查数据库、执行迁移、验证必需表存在。
 - 认证与用户：
   - 注册、登录、当前用户、登出 API 已实现。

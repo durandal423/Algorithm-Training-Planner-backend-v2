@@ -8,6 +8,18 @@
 
 namespace training {
 
+inline nlohmann::json algorithm_summary_json(const std::string& summary) {
+    if (summary.empty()) {
+        return nullptr;
+    }
+
+    auto parsed = nlohmann::json::parse(summary, nullptr, false);
+    if (!parsed.is_discarded()) {
+        return parsed;
+    }
+    return summary;
+}
+
 struct TrainingGoal {
     long long id{};
     long long user_id{};
@@ -71,7 +83,7 @@ inline void to_json(nlohmann::json& json, const TrainingPlan& plan) {
         {"candidateCount", plan.candidate_count},
         {"selectedCount", plan.selected_count},
         {"totalEstimatedMinutes", plan.total_estimated_minutes},
-        {"algorithmSummary", plan.algorithm_summary},
+        {"algorithmSummary", algorithm_summary_json(plan.algorithm_summary)},
         {"createdAt", plan.created_at}
     };
 }
@@ -84,6 +96,7 @@ struct TrainingPlanItem {
     int estimated_minutes{};
     int score{};
     std::string selected_reason;
+    std::vector<std::string> tag_names;
     std::string status{"not_started"};
     std::optional<long long> last_submission_id;
     std::optional<std::string> last_verdict;
@@ -99,6 +112,7 @@ inline void to_json(nlohmann::json& json, const TrainingPlanItem& item) {
         {"estimatedMinutes", item.estimated_minutes},
         {"score", item.score},
         {"selectedReason", item.selected_reason},
+        {"tags", item.tag_names},
         {"status", item.status},
         {"lastSubmissionId", item.last_submission_id},
         {"lastVerdict", item.last_verdict},
@@ -156,6 +170,7 @@ struct OptimizedTrainingPlan {
     std::vector<SelectedTrainingProblem> items;
     int total_estimated_minutes{};
     int total_score{};
+    int covered_tag_mask{};
     std::vector<std::string> covered_tags;
     std::vector<std::string> uncovered_tags;
 };

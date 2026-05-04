@@ -49,3 +49,24 @@ TEST_CASE("auth repository stores hashed sessions for current user lookup") {
     REQUIRE(service.logout(registered.token));
     REQUIRE_FALSE(service.currentUser(registered.token).has_value());
 }
+
+TEST_CASE("seeded admin user can log in with default credentials") {
+    if (!test_support::dbTestsEnabled()) {
+        SUCCEED("Set RUN_DB_TESTS=1 to run PostgreSQL auth repository tests.");
+        return;
+    }
+
+    test_support::ensureDatabaseReady();
+
+    ConnectionPool pool{Database::appConninfo(), 4};
+    auth::AuthRepository repository{pool};
+    auth::AuthService service{repository};
+
+    const auto login = service.login("admin", "12345678", std::nullopt, std::nullopt);
+    REQUIRE(login.user.username == "admin");
+    REQUIRE(login.user.display_name == "admin");
+    REQUIRE(login.user.role == "admin");
+    REQUIRE(login.user.status == "active");
+
+    REQUIRE(service.logout(login.token));
+}

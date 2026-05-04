@@ -246,11 +246,34 @@ std::vector<TrainingPlanItem> TrainingRepository::listPlanItems(long long plan_i
     std::vector<TrainingPlanItem> items;
     const auto rows = tx.exec(
         R"SQL(
-            SELECT id, plan_id, problem_id, order_index, estimated_minutes, score,
-                   selected_reason, status, last_submission_id, last_verdict, updated_at
-            FROM training_plan_items
-            WHERE plan_id = $1
-            ORDER BY order_index, id
+            SELECT tpi.id,
+                   tpi.plan_id,
+                   tpi.problem_id,
+                   tpi.order_index,
+                   tpi.estimated_minutes,
+                   tpi.score,
+                   tpi.selected_reason,
+                   tpi.status,
+                   tpi.last_submission_id,
+                   tpi.last_verdict,
+                   tpi.updated_at,
+                   COALESCE(string_agg(DISTINCT t.name, ',' ORDER BY t.name), '') AS tag_names
+            FROM training_plan_items tpi
+            LEFT JOIN problem_tags pt ON pt.problem_id = tpi.problem_id
+            LEFT JOIN tags t ON t.id = pt.tag_id
+            WHERE tpi.plan_id = $1
+            GROUP BY tpi.id,
+                     tpi.plan_id,
+                     tpi.problem_id,
+                     tpi.order_index,
+                     tpi.estimated_minutes,
+                     tpi.score,
+                     tpi.selected_reason,
+                     tpi.status,
+                     tpi.last_submission_id,
+                     tpi.last_verdict,
+                     tpi.updated_at
+            ORDER BY tpi.order_index, tpi.id
         )SQL",
         pqxx::params{plan_id}
     );

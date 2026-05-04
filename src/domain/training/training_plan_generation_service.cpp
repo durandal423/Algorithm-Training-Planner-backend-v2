@@ -29,32 +29,104 @@ std::vector<TrainingPlanItem> select_items(
     return items;
 }
 
-std::string algorithm_summary(
-    const StableDifficultyWindow& window,
-    const OptimizedTrainingPlan& optimized,
-    long long elapsed_ms
+long long elapsed_microseconds(
+    std::chrono::steady_clock::time_point started
 ) {
-    return "selectStableDifficultyWindow: two-pointer stable difficulty window [" +
-        std::to_string(window.left_difficulty) + ", " +
-        std::to_string(window.right_difficulty) + "], span=" +
-        std::to_string(window.difficulty_span) + ", windowCandidates=" +
-        std::to_string(window.candidates.size()) +
-        "; optimizeTrainingPlanByDP: 0/1 knapsack by time budget and target count, totalScore=" +
-        std::to_string(optimized.total_score) + ", elapsedMs=" +
-        std::to_string(elapsed_ms);
+    return std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now() - started
+    ).count();
 }
 
-std::string brute_force_algorithm_summary(
-    const BruteForceTrainingPlan& brute_force,
-    int candidate_count,
-    long long elapsed_ms
+nlohmann::json index_value(int index) {
+    if (index < 0) {
+        return nullptr;
+    }
+    return index + 1;
+}
+
+int weak_tag_hit_count(const StableDifficultyWindow& window) {
+    int count = 0;
+    for (const auto& candidate : window.candidates) {
+        if (candidate.matched_tag_count > 0) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+nlohmann::json candidate_window_summary(
+    const StableDifficultyWindow& window,
+    long long elapsed_us
 ) {
-    return "optimizeTrainingPlanByBruteForce: exhaustive DFS over candidate combinations, candidateCount=" +
-        std::to_string(candidate_count) + ", consideredCandidates=" +
-        std::to_string(brute_force.considered_candidate_count) + ", evaluatedCombinations=" +
-        std::to_string(brute_force.evaluated_combination_count) + ", totalScore=" +
-        std::to_string(brute_force.optimized.total_score) + ", elapsedMs=" +
-        std::to_string(elapsed_ms);
+    return {
+        {"leftIndex", index_value(window.left_index)},
+        {"rightIndex", index_value(window.right_index)},
+        {
+            "leftDifficulty",
+            window.left_index < 0
+                ? nlohmann::json{nullptr}
+                : nlohmann::json{window.left_difficulty}
+        },
+        {
+            "rightDifficulty",
+            window.right_index < 0
+                ? nlohmann::json{nullptr}
+                : nlohmann::json{window.right_difficulty}
+        },
+        {"difficultySpan", window.difficulty_span},
+        {"candidateCount", static_cast<int>(window.candidates.size())},
+        {"wrongProblemCount", window.wrong_problem_count},
+        {"weakTagHitCount", weak_tag_hit_count(window)},
+        {"coverageRatio", window.coverage_ratio},
+        {"coveredTags", window.covered_tags},
+        {"uncoveredTags", window.uncovered_tags},
+        {"elapsedMicroseconds", elapsed_us}
+    };
+}
+
+nlohmann::json optimization_result_summary(
+    const OptimizedTrainingPlan& optimized,
+    long long elapsed_us
+) {
+    return {
+        {"selectedCount", static_cast<int>(optimized.items.size())},
+        {"totalEstimatedMinutes", optimized.total_estimated_minutes},
+        {"totalScore", optimized.total_score},
+        {"coveredTagMask", optimized.covered_tag_mask},
+        {"coveredTags", optimized.covered_tags},
+        {"uncoveredTags", optimized.uncovered_tags},
+        {"elapsedMicroseconds", elapsed_us}
+    };
+}
+
+nlohmann::json algorithm_summary(
+    const StableDifficultyWindow& window,
+    const OptimizedTrainingPlan& optimized,
+    long long window_elapsed_us,
+    long long optimization_elapsed_us
+) {
+    return {
+        {"algorithm", "dp"},
+        {"totalElapsedMicroseconds", window_elapsed_us + optimization_elapsed_us},
+        {"candidateWindow", candidate_window_summary(window, window_elapsed_us)},
+        {"optimizationResult", optimization_result_summary(optimized, optimization_elapsed_us)}
+    };
+}
+
+nlohmann::json brute_force_algorithm_summary(
+    const BruteForceTrainingPlan& brute_force,
+    long long elapsed_us
+) {
+    auto optimization_result = optimization_result_summary(brute_force.optimized, elapsed_us);
+    optimization_result["combinationsEvaluated"] = brute_force.evaluated_combination_count;
+    optimization_result["combinationLimit"] = nullptr;
+
+    return {
+        {"algorithm", "bruteforce"},
+        {"totalElapsedMicroseconds", elapsed_us},
+        {"candidateWindow", nullptr},
+        {"optimizationResult", optimization_result}
+    };
 }
 
 } // namespace
@@ -74,27 +146,26 @@ nlohmann::json TrainingPlanGenerationService::generatePlan(
 
     const auto candidates = repository.listProblemCandidates(*goal, command.include_hidden);
     OptimizedTrainingPlan optimized;
-    std::string summary;
+    nlohmann::json summary;
 
-    const auto started = std::chrono::steady_clock::now();
     if (command.algorithm == TrainingPlanGenerationAlgorithm::BruteForce) {
+        const auto started = std::chrono::steady_clock::now();
         const auto brute_force = optimizeTrainingPlanByBruteForce(candidates, *goal);
-        const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - started
-        ).count();
+        const auto elapsed_us = elapsed_microseconds(started);
         optimized = brute_force.optimized;
         summary = brute_force_algorithm_summary(
             brute_force,
-            static_cast<int>(candidates.size()),
-            elapsed_ms
+            elapsed_us
         );
     } else {
+        const auto window_started = std::chrono::steady_clock::now();
         const auto window = selectStableDifficultyWindow(candidates, *goal);
+        const auto window_elapsed_us = elapsed_microseconds(window_started);
+
+        const auto optimization_started = std::chrono::steady_clock::now();
         optimized = optimizeTrainingPlanByDP(window, *goal);
-        const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - started
-        ).count();
-        summary = algorithm_summary(window, optimized, elapsed_ms);
+        const auto optimization_elapsed_us = elapsed_microseconds(optimization_started);
+        summary = algorithm_summary(window, optimized, window_elapsed_us, optimization_elapsed_us);
     }
 
     auto items = select_items(optimized);
@@ -112,7 +183,7 @@ nlohmann::json TrainingPlanGenerationService::generatePlan(
     plan.candidate_count = static_cast<int>(candidates.size());
     plan.selected_count = static_cast<int>(items.size());
     plan.total_estimated_minutes = optimized.total_estimated_minutes;
-    plan.algorithm_summary = summary;
+    plan.algorithm_summary = summary.dump();
 
     const auto plan_id = repository.createPlan(plan, items);
     const auto saved_plan = repository.getPlan(plan_id, command.user_id);

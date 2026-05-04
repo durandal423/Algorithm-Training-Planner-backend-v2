@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
+#include <optional>
 
 namespace judge {
 namespace {
@@ -59,13 +60,19 @@ bool JudgeService::processNextSubmission() {
         return false;
     }
 
-    const auto work_dir = make_work_dir(submission->id);
     spdlog::info(
         "judge submission picked up (submission_id={}, problem_id={}, worker={})",
         submission->id,
         submission->problem_id,
         worker_id_
     );
+
+    std::optional<std::filesystem::path> work_dir;
+    const auto remove_work_dir = [&work_dir] {
+        if (work_dir) {
+            std::filesystem::remove_all(*work_dir);
+        }
+    };
 
     try {
         const auto config = repository_.getConfig(submission->problem_id);
@@ -76,18 +83,17 @@ bool JudgeService::processNextSubmission() {
                 "JE",
                 "judge config is missing or disabled"
             );
-            std::filesystem::remove_all(work_dir);
             return true;
         }
 
         const auto test_cases = repository_.listJudgingTestCases(submission->problem_id);
         if (test_cases.empty()) {
             repository_.failSubmission(submission->id, worker_id_, "JE", "no judge test cases configured");
-            std::filesystem::remove_all(work_dir);
             return true;
         }
 
-        const auto compile = runner_.compile(*submission, *config, work_dir);
+        work_dir = make_work_dir(submission->id);
+        const auto compile = runner_.compile(*submission, *config, *work_dir);
         if (!compile.success) {
             const auto verdict = compile.system_error ? "JE" : "CE";
             repository_.completeSubmission(
@@ -101,7 +107,7 @@ bool JudgeService::processNextSubmission() {
                 std::nullopt,
                 std::nullopt
             );
-            std::filesystem::remove_all(work_dir);
+            remove_work_dir();
             return true;
         }
         if (!repository_.refreshSubmissionLease(submission->id, worker_id_)) {
@@ -110,7 +116,7 @@ bool JudgeService::processNextSubmission() {
                 submission->id,
                 worker_id_
             );
-            std::filesystem::remove_all(work_dir);
+            remove_work_dir();
             return true;
         }
 
@@ -135,7 +141,7 @@ bool JudgeService::processNextSubmission() {
                         submission->id,
                         worker_id_
                     );
-                    std::filesystem::remove_all(work_dir);
+                    remove_work_dir();
                     return true;
                 }
                 final_verdict = "JE";
@@ -148,17 +154,17 @@ bool JudgeService::processNextSubmission() {
                     submission->id,
                     worker_id_
                 );
-                std::filesystem::remove_all(work_dir);
+                remove_work_dir();
                 return true;
             }
-            const auto run = runner_.run(*config, test_case, work_dir, run_index++);
+            const auto run = runner_.run(*config, test_case, *work_dir, run_index++);
             if (!repository_.refreshSubmissionLease(submission->id, worker_id_)) {
                 spdlog::warn(
                     "judge submission lease lost after test case run (submission_id={}, worker={})",
                     submission->id,
                     worker_id_
                 );
-                std::filesystem::remove_all(work_dir);
+                remove_work_dir();
                 return true;
             }
             max_time_ms = std::max(max_time_ms, run.time_ms);
@@ -200,7 +206,7 @@ bool JudgeService::processNextSubmission() {
                     submission->id,
                     worker_id_
                 );
-                std::filesystem::remove_all(work_dir);
+                remove_work_dir();
                 return true;
             }
             if (verdict == "AC") {
@@ -227,10 +233,10 @@ bool JudgeService::processNextSubmission() {
                 submission->id,
                 worker_id_
             );
-            std::filesystem::remove_all(work_dir);
+            remove_work_dir();
             return true;
         }
-        std::filesystem::remove_all(work_dir);
+        remove_work_dir();
         spdlog::info(
             "judge submission completed (submission_id={}, verdict={}, score={})",
             submission->id,
@@ -240,7 +246,7 @@ bool JudgeService::processNextSubmission() {
         return true;
     } catch (const std::exception& error) {
         repository_.failSubmission(submission->id, worker_id_, "JE", error.what());
-        std::filesystem::remove_all(work_dir);
+        remove_work_dir();
         spdlog::error("judge submission failed (submission_id={}): {}", submission->id, error.what());
         return true;
     }

@@ -81,6 +81,15 @@ TrainingPlanItem item_from_row(const Row& row) {
     item.last_submission_id = row["last_submission_id"].template get<long long>();
     item.last_verdict = row["last_verdict"].template get<std::string>();
     item.updated_at = row["updated_at"].template as<std::string>("");
+
+    std::istringstream input{row["tag_names"].template as<std::string>("")};
+    std::string tag;
+    while (std::getline(input, tag, ',')) {
+        tag = detail::trim_copy(tag);
+        if (!tag.empty()) {
+            item.tag_names.push_back(std::move(tag));
+        }
+    }
     return item;
 }
 

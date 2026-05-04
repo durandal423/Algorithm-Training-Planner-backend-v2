@@ -35,6 +35,25 @@ training::TrainingGoal goal() {
     return item;
 }
 
+std::vector<std::string> all_tags() {
+    return {
+        "双指针",
+        "滑动窗口",
+        "动态规划",
+        "贪心",
+        "图论",
+        "搜索",
+        "数论",
+        "数据结构",
+        "状态压缩",
+        "排序",
+        "哈希表",
+        "连通性",
+        "前缀和",
+        "二分"
+    };
+}
+
 } // namespace
 
 TEST_CASE("selectStableDifficultyWindow uses a stable two-pointer difficulty window") {
@@ -77,6 +96,35 @@ TEST_CASE("optimizeTrainingPlanByDP respects time and count budgets") {
     }
 }
 
+TEST_CASE("optimizeTrainingPlanByDP prefers requested count before raw score") {
+    std::vector<training::TrainingProblemCandidate> candidates;
+    for (int i = 0; i < 6; ++i) {
+        candidates.push_back(candidate(i + 1, 1500 + i, 30, {"动态规划"}, 100));
+    }
+    for (int i = 0; i < 10; ++i) {
+        candidates.push_back(candidate(100 + i, 2600 + i, 18, {"动态规划"}));
+    }
+
+    auto selected_goal = goal();
+    selected_goal.target_count = 10;
+    selected_goal.time_budget_minutes = 180;
+    selected_goal.tag_names = {"动态规划"};
+
+    training::StableDifficultyWindow window;
+    window.left_index = 0;
+    window.right_index = static_cast<int>(candidates.size()) - 1;
+    window.left_difficulty = 1500;
+    window.right_difficulty = 2609;
+    window.difficulty_span = 1109;
+    window.covered_tags = selected_goal.tag_names;
+    window.candidates = std::move(candidates);
+
+    const auto plan = training::optimizeTrainingPlanByDP(window, selected_goal);
+
+    REQUIRE(plan.items.size() == 10);
+    REQUIRE(plan.total_estimated_minutes <= selected_goal.time_budget_minutes);
+}
+
 TEST_CASE("optimizeTrainingPlanByBruteForce enumerates feasible combinations") {
     const std::vector<training::TrainingProblemCandidate> candidates = {
         candidate(1, 1000, 20, {"动态规划"}),
@@ -96,4 +144,86 @@ TEST_CASE("optimizeTrainingPlanByBruteForce enumerates feasible combinations") {
     for (const auto& item : brute_force.optimized.items) {
         REQUIRE(item.selected_reason.find("暴力枚举") != std::string::npos);
     }
+}
+
+TEST_CASE("training plan algorithms support all tags and target count thirty") {
+    const auto tags = all_tags();
+    std::vector<training::TrainingProblemCandidate> candidates;
+    for (int i = 0; i < 1000; ++i) {
+        candidates.push_back(candidate(
+            i + 1,
+            800 + i * 2,
+            15 + (i % 4),
+            {
+                tags[i % tags.size()],
+                tags[(i + 5) % tags.size()],
+                tags[(i + 9) % tags.size()]
+            },
+            i % 11 == 0 ? 1 : 0
+        ));
+    }
+
+    auto selected_goal = goal();
+    selected_goal.target_count = 30;
+    selected_goal.time_budget_minutes = 480;
+    selected_goal.tag_names = tags;
+
+    const auto window = training::selectStableDifficultyWindow(candidates, selected_goal);
+    const auto dp_plan = training::optimizeTrainingPlanByDP(window, selected_goal);
+    const auto brute_force = training::optimizeTrainingPlanByBruteForce(candidates, selected_goal);
+
+    REQUIRE(dp_plan.items.size() == 30);
+    REQUIRE(dp_plan.total_estimated_minutes <= selected_goal.time_budget_minutes);
+    REQUIRE(dp_plan.covered_tags.size() == tags.size());
+    REQUIRE(brute_force.optimized.items.size() == 30);
+    REQUIRE(brute_force.optimized.total_estimated_minutes <= selected_goal.time_budget_minutes);
+    REQUIRE(brute_force.optimized.covered_tags.size() == tags.size());
+    REQUIRE(brute_force.evaluated_combination_count > 0);
+}
+
+TEST_CASE("TrainingPlan serializes JSON algorithm summaries as structured data") {
+    training::TrainingPlan plan;
+    plan.id = 12;
+    plan.user_id = 1;
+    plan.name = "第 1 周训练";
+    plan.status = "draft";
+    plan.candidate_count = 20;
+    plan.selected_count = 8;
+    plan.total_estimated_minutes = 175;
+    plan.algorithm_summary = R"JSON({
+        "algorithm": "dp",
+        "totalElapsedMicroseconds": 18432,
+        "optimizationResult": {
+            "selectedCount": 8,
+            "totalEstimatedMinutes": 175,
+            "totalScore": 574,
+            "elapsedMicroseconds": 15222
+        }
+    })JSON";
+
+    const nlohmann::json json = plan;
+
+    REQUIRE(json.at("algorithmSummary").is_object());
+    REQUIRE(json.at("algorithmSummary").at("algorithm") == "dp");
+    REQUIRE(json.at("algorithmSummary").at("totalElapsedMicroseconds") == 18432);
+    REQUIRE(json.at("algorithmSummary").at("optimizationResult").at("selectedCount") == 8);
+}
+
+TEST_CASE("TrainingPlanItem serializes selected problem tags") {
+    training::TrainingPlanItem item;
+    item.id = 1;
+    item.plan_id = 12;
+    item.problem_id = 34;
+    item.order_index = 1;
+    item.estimated_minutes = 25;
+    item.score = 145;
+    item.selected_reason = "覆盖目标标签=双指针,滑动窗口";
+    item.tag_names = {"双指针", "滑动窗口"};
+
+    const nlohmann::json json = item;
+
+    REQUIRE(json.at("tags").is_array());
+    REQUIRE(json.at("tags").size() == 2);
+    REQUIRE(json.at("tags").at(0) == "双指针");
+    REQUIRE(json.at("tags").at(1) == "滑动窗口");
 }

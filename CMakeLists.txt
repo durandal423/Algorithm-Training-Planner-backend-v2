@@ -201,6 +201,7 @@ add_executable(project-tests
     tests/unit/training_plan_algorithms_test.cpp
     tests/db/auth_repository_test.cpp
     tests/db/judge_repository_queue_test.cpp
+    tests/db/problem_repository_test.cpp
     tests/db/task_queue_repository_test.cpp
     tests/db/task_repository_test.cpp
     src/algorithms/training_plan_algorithms.cpp
@@ -221,6 +222,9 @@ add_executable(project-tests
     src/domain/judge/judge_repository.hpp
     src/domain/judge/output_comparator.cpp
     src/domain/judge/output_comparator.hpp
+    src/domain/problem/problem_models.hpp
+    src/domain/problem/problem_repository.cpp
+    src/domain/problem/problem_repository.hpp
     src/domain/training/training_models.hpp
     src/domain/task/task_models.hpp
     src/domain/task/task_queue_repository.cpp
@@ -241,6 +245,7 @@ target_compile_features(project-tests PRIVATE
 
 target_link_libraries(project-tests PRIVATE
     Catch2::Catch2WithMain
+    Crow::Crow
     libpqxx::pqxx
     unofficial-sodium::sodium
     nlohmann_json::nlohmann_json

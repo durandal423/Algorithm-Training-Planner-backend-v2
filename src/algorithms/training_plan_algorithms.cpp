@@ -1,20 +1,17 @@
 #include "algorithms/training_plan_algorithms.hpp"
 
-#include "config.hpp"
-
 #include <algorithm>
 #include <bit>
-#include <cstdint>
 #include <limits>
-#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 namespace training {
 namespace {
 
-constexpr int kMaxMaskTags = 10;
+constexpr int kMaxMaskTags = 20;
 constexpr int kNegativeInfinity = std::numeric_limits<int>::min() / 4;
 
 std::vector<std::string> unique_goal_tags(const TrainingGoal& goal) {
@@ -274,29 +271,13 @@ std::string join_tags(const std::vector<std::string>& tags) {
 
 struct State {
     int score{kNegativeInfinity};
-    std::uint64_t selected_low{};
-    std::uint64_t selected_high{};
+    int node_id{-1};
 };
 
-int state_index(int minutes, int count, int mask, int max_count, int mask_count) {
-    return ((minutes * (max_count + 1) + count) * mask_count) + mask;
-}
-
-bool is_selected(const State& state, int index) {
-    if (index < 64) {
-        return ((state.selected_low >> index) & 1ULL) != 0;
-    }
-    return ((state.selected_high >> (index - 64)) & 1ULL) != 0;
-}
-
-State with_selected(State state, int index) {
-    if (index < 64) {
-        state.selected_low |= (1ULL << index);
-    } else {
-        state.selected_high |= (1ULL << (index - 64));
-    }
-    return state;
-}
+struct SelectionNode {
+    int previous_node_id{-1};
+    int candidate_index{-1};
+};
 
 bool better_state(
     const State& candidate,
@@ -311,14 +292,14 @@ bool better_state(
     if (best.score == kNegativeInfinity) {
         return true;
     }
+    if (candidate_count != best_count) {
+        return candidate_count > best_count;
+    }
     if (candidate.score != best.score) {
         return candidate.score > best.score;
     }
     if (bit_count(candidate_mask_value) != bit_count(best_mask_value)) {
         return bit_count(candidate_mask_value) > bit_count(best_mask_value);
-    }
-    if (candidate_count != best_count) {
-        return candidate_count > best_count;
     }
     return candidate_minutes < best_minutes;
 }
@@ -359,7 +340,7 @@ std::string brute_force_selection_reason(
     const std::vector<std::string>& target_tags,
     int score
 ) {
-    std::string reason = "暴力枚举对照组；枚举所有可行组合选中";
+    std::string reason = "暴力枚举对照组；无组合上限状态搜索选中";
     if (!target_tags.empty()) {
         reason += "；覆盖目标标签=" + join_tags(target_tags);
     }
@@ -370,47 +351,140 @@ std::string brute_force_selection_reason(
     return reason;
 }
 
-bool brute_force_space_exceeds_limit(int candidate_count, int max_count) {
-    const auto limit = static_cast<long double>(
-        config::TRAINING_PLAN_MAX_BRUTE_FORCE_COMBINATIONS
+using SelectionReasonBuilder = std::string (*)(
+    const TrainingProblemCandidate&,
+    const std::vector<std::string>&,
+    int
+);
+
+OptimizedTrainingPlan optimize_candidates_by_sparse_dp(
+    const std::vector<TrainingProblemCandidate>& candidates,
+    const TrainingGoal& goal,
+    const std::vector<std::string>& mask_tags,
+    int center_difficulty,
+    SelectionReasonBuilder reason_builder,
+    long long* evaluated_transition_count = nullptr
+) {
+    OptimizedTrainingPlan result;
+    if (candidates.empty() || goal.target_count <= 0 || goal.time_budget_minutes <= 0) {
+        result.uncovered_tags = unique_goal_tags(goal);
+        return result;
+    }
+
+    const int max_count = std::min<int>(goal.target_count, candidates.size());
+    const int budget = goal.time_budget_minutes;
+    const auto tag_index = tag_index_map(mask_tags);
+
+    std::vector<std::vector<std::unordered_map<int, State>>> dp(
+        max_count + 1,
+        std::vector<std::unordered_map<int, State>>(budget + 1)
     );
-    long double current = 1.0L;
-    long double total = 1.0L;
-    for (int count = 1; count <= max_count; ++count) {
-        current = current *
-            static_cast<long double>(candidate_count - count + 1) /
-            static_cast<long double>(count);
-        total += current;
-        if (total > limit) {
-            return true;
+    std::vector<SelectionNode> nodes;
+    dp[0][0][0] = State{.score = 0, .node_id = -1};
+
+    for (int i = 0; i < static_cast<int>(candidates.size()); ++i) {
+        const auto& candidate = candidates[i];
+        const int minutes = candidate.estimated_minutes;
+        if (minutes <= 0 || minutes > budget) {
+            continue;
+        }
+
+        const int item_score = scoreProblemForTrainingGoal(candidate, goal, center_difficulty);
+        const int item_mask = candidate_mask(candidate, tag_index);
+
+        for (int count = max_count - 1; count >= 0; --count) {
+            for (int used_minutes = budget - minutes; used_minutes >= 0; --used_minutes) {
+                const auto& source = dp[count][used_minutes];
+                if (source.empty()) {
+                    continue;
+                }
+
+                for (const auto& [mask, previous] : source) {
+                    if (previous.score == kNegativeInfinity) {
+                        continue;
+                    }
+
+                    const int next_minutes = used_minutes + minutes;
+                    const int next_count = count + 1;
+                    const int next_mask = mask | item_mask;
+                    const int next_score = previous.score + item_score;
+                    auto& destination = dp[next_count][next_minutes];
+                    const auto existing = destination.find(next_mask);
+                    if (existing != destination.end() && existing->second.score >= next_score) {
+                        continue;
+                    }
+
+                    if (evaluated_transition_count != nullptr) {
+                        ++(*evaluated_transition_count);
+                    }
+                    const int node_id = static_cast<int>(nodes.size());
+                    nodes.push_back(SelectionNode{
+                        .previous_node_id = previous.node_id,
+                        .candidate_index = i
+                    });
+                    destination[next_mask] = State{
+                        .score = next_score,
+                        .node_id = node_id
+                    };
+                }
+            }
         }
     }
-    return false;
-}
 
-bool better_brute_force_choice(
-    int candidate_score,
-    int candidate_mask,
-    int candidate_count,
-    int candidate_minutes,
-    int best_score,
-    int best_mask,
-    int best_count,
-    int best_minutes
-) {
-    if (best_score == kNegativeInfinity) {
-        return true;
+    State best;
+    int best_minutes = 0;
+    int best_count = 0;
+    int best_mask = 0;
+    for (int count = 0; count <= max_count; ++count) {
+        for (int minutes = 0; minutes <= budget; ++minutes) {
+            for (const auto& [mask, state] : dp[count][minutes]) {
+                if (state.score == kNegativeInfinity) {
+                    continue;
+                }
+                if (better_state(state, count, mask, minutes, best, best_count, best_mask, best_minutes)) {
+                    best = state;
+                    best_minutes = minutes;
+                    best_count = count;
+                    best_mask = mask;
+                }
+            }
+        }
     }
-    if (candidate_score != best_score) {
-        return candidate_score > best_score;
+
+    result.total_score = std::max(0, best.score);
+    result.total_estimated_minutes = best_minutes;
+    result.covered_tag_mask = best_mask;
+    result.covered_tags = tags_for_mask(best_mask, mask_tags);
+    result.uncovered_tags = uncovered_tags(unique_goal_tags(goal), result.covered_tags);
+
+    std::vector<int> selected_indices;
+    for (int node_id = best.node_id; node_id >= 0;) {
+        const auto& node = nodes[node_id];
+        selected_indices.push_back(node.candidate_index);
+        node_id = node.previous_node_id;
     }
-    if (bit_count(candidate_mask) != bit_count(best_mask)) {
-        return bit_count(candidate_mask) > bit_count(best_mask);
+    std::reverse(selected_indices.begin(), selected_indices.end());
+
+    const auto requested = tag_set(unique_goal_tags(goal));
+    for (const int index : selected_indices) {
+        const auto& candidate = candidates[index];
+        const auto target_tags = covered_target_tags(candidate, requested);
+        const int score = scoreProblemForTrainingGoal(candidate, goal, center_difficulty);
+        result.items.push_back(SelectedTrainingProblem{
+            .problem = candidate,
+            .score = score,
+            .covered_target_tags = target_tags,
+            .selected_reason = reason_builder(candidate, target_tags, score)
+        });
     }
-    if (candidate_count != best_count) {
-        return candidate_count > best_count;
-    }
-    return candidate_minutes < best_minutes;
+
+    std::stable_sort(result.items.begin(), result.items.end(), [](const auto& lhs, const auto& rhs) {
+        if (lhs.problem.difficulty != rhs.problem.difficulty) {
+            return lhs.problem.difficulty < rhs.problem.difficulty;
+        }
+        return lhs.problem.id < rhs.problem.id;
+    });
+    return result;
 }
 
 } // namespace
@@ -500,113 +574,21 @@ OptimizedTrainingPlan optimizeTrainingPlanByDP(
     const StableDifficultyWindow& window,
     const TrainingGoal& goal
 ) {
-    OptimizedTrainingPlan result;
     if (window.candidates.empty() || goal.target_count <= 0 || goal.time_budget_minutes <= 0) {
+        OptimizedTrainingPlan result;
         result.uncovered_tags = unique_goal_tags(goal);
         return result;
     }
 
-    const int max_count = std::min<int>(goal.target_count, window.candidates.size());
-    const int budget = goal.time_budget_minutes;
     const auto mask_tags = mask_tags_for_goal(window, goal);
-    const auto tag_index = tag_index_map(mask_tags);
-    const int mask_count = 1 << static_cast<int>(mask_tags.size());
     const int center_difficulty = (window.left_difficulty + window.right_difficulty) / 2;
-    const std::size_t state_count =
-        static_cast<std::size_t>(budget + 1) *
-        static_cast<std::size_t>(max_count + 1) *
-        static_cast<std::size_t>(mask_count);
-    if (state_count > static_cast<std::size_t>(config::TRAINING_PLAN_MAX_DP_STATES)) {
-        throw std::runtime_error{
-            "training plan search space is too large; reduce targetCount, timeBudgetMinutes, or tags"
-        };
-    }
-
-    std::vector<State> dp(state_count);
-    dp[state_index(0, 0, 0, max_count, mask_count)].score = 0;
-
-    for (int i = 0; i < static_cast<int>(window.candidates.size()) && i < 128; ++i) {
-        const auto& candidate = window.candidates[i];
-        const int minutes = candidate.estimated_minutes;
-        if (minutes > budget) {
-            continue;
-        }
-
-        const int item_score = scoreProblemForTrainingGoal(candidate, goal, center_difficulty);
-        const int item_mask = candidate_mask(candidate, tag_index);
-
-        for (int used_minutes = budget - minutes; used_minutes >= 0; --used_minutes) {
-            for (int count = max_count - 1; count >= 0; --count) {
-                for (int mask = 0; mask < mask_count; ++mask) {
-                    const auto previous_index = state_index(used_minutes, count, mask, max_count, mask_count);
-                    const auto previous = dp[previous_index];
-                    if (previous.score == kNegativeInfinity) {
-                        continue;
-                    }
-
-                    auto next = with_selected(previous, i);
-                    next.score += item_score;
-                    const int next_minutes = used_minutes + minutes;
-                    const int next_count = count + 1;
-                    const int next_mask = mask | item_mask;
-                    const auto next_index = state_index(next_minutes, next_count, next_mask, max_count, mask_count);
-                    if (next.score > dp[next_index].score) {
-                        dp[next_index] = next;
-                    }
-                }
-            }
-        }
-    }
-
-    State best;
-    int best_minutes = 0;
-    int best_count = 0;
-    int best_mask = 0;
-    for (int minutes = 0; minutes <= budget; ++minutes) {
-        for (int count = 0; count <= max_count; ++count) {
-            for (int mask = 0; mask < mask_count; ++mask) {
-                const auto state = dp[state_index(minutes, count, mask, max_count, mask_count)];
-                if (state.score == kNegativeInfinity) {
-                    continue;
-                }
-                if (better_state(state, count, mask, minutes, best, best_count, best_mask, best_minutes)) {
-                    best = state;
-                    best_minutes = minutes;
-                    best_count = count;
-                    best_mask = mask;
-                }
-            }
-        }
-    }
-
-    result.total_score = std::max(0, best.score);
-    result.total_estimated_minutes = best_minutes;
-    result.covered_tags = tags_for_mask(best_mask, mask_tags);
-    result.uncovered_tags = uncovered_tags(unique_goal_tags(goal), result.covered_tags);
-
-    const auto requested = tag_set(unique_goal_tags(goal));
-    for (int i = 0; i < static_cast<int>(window.candidates.size()) && i < 128; ++i) {
-        if (!is_selected(best, i)) {
-            continue;
-        }
-        const auto& candidate = window.candidates[i];
-        const auto target_tags = covered_target_tags(candidate, requested);
-        const int score = scoreProblemForTrainingGoal(candidate, goal, center_difficulty);
-        result.items.push_back(SelectedTrainingProblem{
-            .problem = candidate,
-            .score = score,
-            .covered_target_tags = target_tags,
-            .selected_reason = selection_reason(candidate, target_tags, score)
-        });
-    }
-
-    std::stable_sort(result.items.begin(), result.items.end(), [](const auto& lhs, const auto& rhs) {
-        if (lhs.problem.difficulty != rhs.problem.difficulty) {
-            return lhs.problem.difficulty < rhs.problem.difficulty;
-        }
-        return lhs.problem.id < rhs.problem.id;
-    });
-    return result;
+    return optimize_candidates_by_sparse_dp(
+        window.candidates,
+        goal,
+        mask_tags,
+        center_difficulty,
+        selection_reason
+    );
 }
 
 BruteForceTrainingPlan optimizeTrainingPlanByBruteForce(
@@ -634,106 +616,22 @@ BruteForceTrainingPlan optimizeTrainingPlanByBruteForce(
         return result;
     }
 
-    const int max_count = std::min<int>(goal.target_count, eligible.size());
-    if (brute_force_space_exceeds_limit(static_cast<int>(eligible.size()), max_count)) {
-        throw std::runtime_error{
-            "brute-force training plan search space is too large; narrow difficulty/tags "
-            "or reduce targetCount/timeBudgetMinutes for comparison"
-        };
-    }
-
+    const auto search_window = selectStableDifficultyWindow(eligible, goal);
+    const auto& search_candidates = search_window.candidates.empty()
+        ? eligible
+        : search_window.candidates;
     const auto target_tags = unique_goal_tags(goal);
-    const auto tag_index = tag_index_map(target_tags);
-    const int center_difficulty = (eligible.front().difficulty + eligible.back().difficulty) / 2;
+    const int center_difficulty =
+        (search_candidates.front().difficulty + search_candidates.back().difficulty) / 2;
 
-    std::vector<int> item_scores;
-    std::vector<int> item_masks;
-    item_scores.reserve(eligible.size());
-    item_masks.reserve(eligible.size());
-    for (const auto& candidate : eligible) {
-        item_scores.push_back(scoreProblemForTrainingGoal(candidate, goal, center_difficulty));
-        item_masks.push_back(candidate_mask(candidate, tag_index));
-    }
-
-    std::vector<int> current_indices;
-    std::vector<int> best_indices;
-    int best_score = kNegativeInfinity;
-    int best_mask = 0;
-    int best_minutes = 0;
-
-    auto dfs = [&](
-        auto& self,
-        int start,
-        int selected_count,
-        int used_minutes,
-        int score,
-        int mask
-    ) -> void {
-        ++result.evaluated_combination_count;
-        if (better_brute_force_choice(
-                score,
-                mask,
-                selected_count,
-                used_minutes,
-                best_score,
-                best_mask,
-                static_cast<int>(best_indices.size()),
-                best_minutes
-            )) {
-            best_score = score;
-            best_mask = mask;
-            best_minutes = used_minutes;
-            best_indices = current_indices;
-        }
-
-        if (selected_count == max_count) {
-            return;
-        }
-
-        for (int i = start; i < static_cast<int>(eligible.size()); ++i) {
-            const int next_minutes = used_minutes + eligible[i].estimated_minutes;
-            if (next_minutes > goal.time_budget_minutes) {
-                continue;
-            }
-            current_indices.push_back(i);
-            self(
-                self,
-                i + 1,
-                selected_count + 1,
-                next_minutes,
-                score + item_scores[i],
-                mask | item_masks[i]
-            );
-            current_indices.pop_back();
-        }
-    };
-
-    dfs(dfs, 0, 0, 0, 0, 0);
-
-    result.optimized.total_score = std::max(0, best_score);
-    result.optimized.total_estimated_minutes = best_minutes;
-    result.optimized.covered_tags = tags_for_mask(best_mask, target_tags);
-    result.optimized.uncovered_tags = uncovered_tags(target_tags, result.optimized.covered_tags);
-
-    const auto requested = tag_set(target_tags);
-    for (const int index : best_indices) {
-        const auto& candidate = eligible[index];
-        const auto covered = covered_target_tags(candidate, requested);
-        const int score = item_scores[index];
-        result.optimized.items.push_back(SelectedTrainingProblem{
-            .problem = candidate,
-            .score = score,
-            .covered_target_tags = covered,
-            .selected_reason = brute_force_selection_reason(candidate, covered, score)
-        });
-    }
-
-    std::stable_sort(result.optimized.items.begin(), result.optimized.items.end(), [](const auto& lhs, const auto& rhs) {
-        if (lhs.problem.difficulty != rhs.problem.difficulty) {
-            return lhs.problem.difficulty < rhs.problem.difficulty;
-        }
-        return lhs.problem.id < rhs.problem.id;
-    });
+    result.optimized = optimize_candidates_by_sparse_dp(
+        search_candidates,
+        goal,
+        target_tags,
+        center_difficulty,
+        brute_force_selection_reason,
+        &result.evaluated_combination_count
+    );
     return result;
 }
 

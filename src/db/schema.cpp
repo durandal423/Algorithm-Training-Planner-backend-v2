@@ -71,6 +71,21 @@ constexpr std::array kMigrations{
         7,
         "007_background_task_queue.sql",
         "add durable background task queue metadata"
+    },
+    MigrationScript{
+        8,
+        "008_seed_generated_problem_tags.sql",
+        "backfill generated training problem tags"
+    },
+    MigrationScript{
+        9,
+        "009_seed_judge_fixtures.sql",
+        "seed judge configs and test cases"
+    },
+    MigrationScript{
+        10,
+        "010_seed_admin_user.sql",
+        "seed default admin user"
     }
 };
 
