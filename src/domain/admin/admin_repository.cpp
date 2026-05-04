@@ -5,21 +5,6 @@
 #include <algorithm>
 
 namespace admin {
-namespace {
-
-AuditLog audit_log_from_row(const auto& row) {
-    AuditLog log;
-    log.id = row["id"].template as<long long>();
-    log.actor_user_id = row["actor_user_id"].template get<long long>();
-    log.action = row["action"].template as<std::string>();
-    log.target_type = row["target_type"].template as<std::string>();
-    log.target_id = row["target_id"].template get<long long>();
-    log.metadata_json = row["metadata"].template as<std::string>("");
-    log.created_at = row["created_at"].template as<std::string>("");
-    return log;
-}
-
-} // namespace
 
 AdminRepository::AdminRepository(ConnectionPool& pool)
     : pool_(pool) {}

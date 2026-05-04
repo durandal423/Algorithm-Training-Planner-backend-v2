@@ -8,6 +8,22 @@
 
 namespace auth {
 
+template <typename Row>
+User user_from_row(const Row& row) {
+    User user;
+    user.id = row["id"].template as<long long>();
+    user.username = row["username"].template as<std::string>();
+    user.email = row["email"].template get<std::string>();
+    user.display_name = row["display_name"].template as<std::string>();
+    user.password_hash = row["password_hash"].template as<std::string>();
+    user.role = row["role"].template as<std::string>();
+    user.status = row["status"].template as<std::string>();
+    user.last_login_at = row["last_login_at"].template get<std::string>();
+    user.created_at = row["created_at"].template as<std::string>();
+    user.updated_at = row["updated_at"].template as<std::string>();
+    return user;
+}
+
 class AuthRepository final {
 public:
     explicit AuthRepository(ConnectionPool& pool);

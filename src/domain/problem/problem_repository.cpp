@@ -4,57 +4,10 @@
 #include <pqxx/pqxx>
 
 #include <algorithm>
-#include <cctype>
 #include <unordered_map>
 
 namespace problem {
 namespace {
-
-Problem problem_from_row(const auto& row) {
-    Problem problem;
-    problem.id = row["id"].template as<long long>();
-    problem.code = row["code"].template as<std::string>();
-    problem.title = row["title"].template as<std::string>();
-    problem.source_platform = row["source_platform"].template as<std::string>();
-    problem.source_url = row["source_url"].template get<std::string>();
-    problem.difficulty = row["difficulty"].template as<int>();
-    problem.estimated_minutes = row["estimated_minutes"].template as<int>();
-    problem.description = row["description"].template as<std::string>("");
-    problem.input_format = row["input_format"].template as<std::string>("");
-    problem.output_format = row["output_format"].template as<std::string>("");
-    problem.sample_input = row["sample_input"].template as<std::string>("");
-    problem.sample_output = row["sample_output"].template as<std::string>("");
-    problem.hint = row["hint"].template as<std::string>("");
-    problem.visibility = row["visibility"].template as<std::string>();
-    problem.created_by = row["created_by"].template get<long long>();
-    problem.created_at = row["created_at"].template as<std::string>("");
-    problem.updated_at = row["updated_at"].template as<std::string>("");
-    return problem;
-}
-
-ProblemSummary problem_summary_from_row(const auto& row) {
-    ProblemSummary problem;
-    problem.id = row["id"].template as<long long>();
-    problem.code = row["code"].template as<std::string>();
-    problem.title = row["title"].template as<std::string>();
-    problem.source_platform = row["source_platform"].template as<std::string>();
-    problem.source_url = row["source_url"].template get<std::string>();
-    problem.difficulty = row["difficulty"].template as<int>();
-    problem.estimated_minutes = row["estimated_minutes"].template as<int>();
-    problem.visibility = row["visibility"].template as<std::string>();
-    problem.created_by = row["created_by"].template get<long long>();
-    problem.created_at = row["created_at"].template as<std::string>("");
-    problem.updated_at = row["updated_at"].template as<std::string>("");
-    return problem;
-}
-
-Tag tag_from_row(const auto& row) {
-    Tag tag;
-    tag.id = row["id"].template as<long long>();
-    tag.name = row["name"].template as<std::string>();
-    tag.description = row["description"].template as<std::string>("");
-    return tag;
-}
 
 constexpr auto kProblemSelect = R"SQL(
     SELECT id, code, title, source_platform, source_url, difficulty, estimated_minutes,

@@ -1,7 +1,6 @@
 #include "api/route_registry.hpp"
 #include "api/http_json.hpp"
 #include "domain/auth/auth_http.hpp"
-#include "domain/task/task_models.hpp"
 
 #include <exception>
 #include <optional>

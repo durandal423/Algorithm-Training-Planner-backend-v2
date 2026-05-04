@@ -3,83 +3,8 @@
 
 #include <pqxx/pqxx>
 
-#include <cctype>
-#include <sstream>
-
 namespace training {
 namespace {
-
-TrainingGoal goal_from_row(const auto& row) {
-    TrainingGoal goal;
-    goal.id = row["id"].template as<long long>();
-    goal.user_id = row["user_id"].template as<long long>();
-    goal.name = row["name"].template as<std::string>();
-    goal.target_count = row["target_count"].template as<int>();
-    goal.time_budget_minutes = row["time_budget_minutes"].template as<int>();
-    goal.difficulty_min = row["difficulty_min"].template get<int>();
-    goal.difficulty_max = row["difficulty_max"].template get<int>();
-    goal.prefer_wrong_problems = row["prefer_wrong_problems"].template as<bool>();
-    goal.prefer_weak_tags = row["prefer_weak_tags"].template as<bool>();
-    goal.difficulty_weight = row["difficulty_weight"].template as<int>();
-    goal.tag_coverage_weight = row["tag_coverage_weight"].template as<int>();
-    goal.wrong_problem_weight = row["wrong_problem_weight"].template as<int>();
-    goal.weak_tag_weight = row["weak_tag_weight"].template as<int>();
-    goal.estimated_time_weight = row["estimated_time_weight"].template as<int>();
-    goal.created_at = row["created_at"].template as<std::string>("");
-    return goal;
-}
-
-TrainingPlan plan_from_row(const auto& row) {
-    TrainingPlan plan;
-    plan.id = row["id"].template as<long long>();
-    plan.user_id = row["user_id"].template as<long long>();
-    plan.goal_id = row["goal_id"].template get<long long>();
-    plan.name = row["name"].template as<std::string>();
-    plan.status = row["status"].template as<std::string>();
-    plan.candidate_count = row["candidate_count"].template as<int>();
-    plan.selected_count = row["selected_count"].template as<int>();
-    plan.total_estimated_minutes = row["total_estimated_minutes"].template as<int>();
-    plan.algorithm_summary = row["algorithm_summary"].template as<std::string>("");
-    plan.created_at = row["created_at"].template as<std::string>("");
-    return plan;
-}
-
-TrainingPlanItem item_from_row(const auto& row) {
-    TrainingPlanItem item;
-    item.id = row["id"].template as<long long>();
-    item.plan_id = row["plan_id"].template as<long long>();
-    item.problem_id = row["problem_id"].template as<long long>();
-    item.order_index = row["order_index"].template as<int>();
-    item.estimated_minutes = row["estimated_minutes"].template as<int>();
-    item.score = row["score"].template as<int>();
-    item.selected_reason = row["selected_reason"].template as<std::string>("");
-    item.status = row["status"].template as<std::string>();
-    item.last_submission_id = row["last_submission_id"].template get<long long>();
-    item.last_verdict = row["last_verdict"].template get<std::string>();
-    item.updated_at = row["updated_at"].template as<std::string>("");
-    return item;
-}
-
-TrainingProblemCandidate candidate_from_row(const auto& row) {
-    TrainingProblemCandidate candidate;
-    candidate.id = row["id"].template as<long long>();
-    candidate.code = row["code"].template as<std::string>();
-    candidate.title = row["title"].template as<std::string>();
-    candidate.difficulty = row["difficulty"].template as<int>();
-    candidate.estimated_minutes = row["estimated_minutes"].template as<int>();
-    candidate.matched_tag_count = row["matched_tag_count"].template as<int>();
-    candidate.wrong_attempt_count = row["wrong_attempt_count"].template as<int>();
-
-    std::istringstream input{row["tag_names"].template as<std::string>("")};
-    std::string tag;
-    while (std::getline(input, tag, ',')) {
-        tag = api::trim_copy(tag);
-        if (!tag.empty()) {
-            candidate.tag_names.push_back(std::move(tag));
-        }
-    }
-    return candidate;
-}
 
 constexpr auto kGoalSelect = R"SQL(
     SELECT id, user_id, name, target_count, time_budget_minutes,

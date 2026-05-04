@@ -9,6 +9,55 @@
 
 namespace problem {
 
+template <typename Row>
+Problem problem_from_row(const Row& row) {
+    Problem problem;
+    problem.id = row["id"].template as<long long>();
+    problem.code = row["code"].template as<std::string>();
+    problem.title = row["title"].template as<std::string>();
+    problem.source_platform = row["source_platform"].template as<std::string>();
+    problem.source_url = row["source_url"].template get<std::string>();
+    problem.difficulty = row["difficulty"].template as<int>();
+    problem.estimated_minutes = row["estimated_minutes"].template as<int>();
+    problem.description = row["description"].template as<std::string>("");
+    problem.input_format = row["input_format"].template as<std::string>("");
+    problem.output_format = row["output_format"].template as<std::string>("");
+    problem.sample_input = row["sample_input"].template as<std::string>("");
+    problem.sample_output = row["sample_output"].template as<std::string>("");
+    problem.hint = row["hint"].template as<std::string>("");
+    problem.visibility = row["visibility"].template as<std::string>();
+    problem.created_by = row["created_by"].template get<long long>();
+    problem.created_at = row["created_at"].template as<std::string>("");
+    problem.updated_at = row["updated_at"].template as<std::string>("");
+    return problem;
+}
+
+template <typename Row>
+ProblemSummary problem_summary_from_row(const Row& row) {
+    ProblemSummary problem;
+    problem.id = row["id"].template as<long long>();
+    problem.code = row["code"].template as<std::string>();
+    problem.title = row["title"].template as<std::string>();
+    problem.source_platform = row["source_platform"].template as<std::string>();
+    problem.source_url = row["source_url"].template get<std::string>();
+    problem.difficulty = row["difficulty"].template as<int>();
+    problem.estimated_minutes = row["estimated_minutes"].template as<int>();
+    problem.visibility = row["visibility"].template as<std::string>();
+    problem.created_by = row["created_by"].template get<long long>();
+    problem.created_at = row["created_at"].template as<std::string>("");
+    problem.updated_at = row["updated_at"].template as<std::string>("");
+    return problem;
+}
+
+template <typename Row>
+Tag tag_from_row(const Row& row) {
+    Tag tag;
+    tag.id = row["id"].template as<long long>();
+    tag.name = row["name"].template as<std::string>();
+    tag.description = row["description"].template as<std::string>("");
+    return tag;
+}
+
 class ProblemRepository final {
 public:
     explicit ProblemRepository(ConnectionPool& pool);

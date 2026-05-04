@@ -5,33 +5,6 @@
 namespace task {
 namespace {
 
-nlohmann::json json_or_empty_object(const pqxx::field_ref field) {
-    return nlohmann::json::parse(field.as<std::string>("{}"));
-}
-
-std::optional<nlohmann::json> optional_json(const pqxx::field_ref field) {
-    const auto text = field.get<std::string>();
-    if (!text) {
-        return std::nullopt;
-    }
-    return nlohmann::json::parse(*text);
-}
-
-Task task_from_row(const auto& row) {
-    return Task{
-        .id = row["id"].template as<long long>(),
-        .type = row["type"].template as<std::string>(),
-        .status = row["status"].template as<std::string>(),
-        .owner_user_id = row["owner_user_id"].template get<long long>(),
-        .payload = json_or_empty_object(row["payload"]),
-        .result = optional_json(row["result"]),
-        .error_message = row["error_message"].template get<std::string>(),
-        .created_at = row["created_at"].template as<std::string>(),
-        .started_at = row["started_at"].template get<std::string>(),
-        .finished_at = row["finished_at"].template get<std::string>()
-    };
-}
-
 constexpr auto kTaskSelect = R"SQL(
     SELECT id,
            type,
