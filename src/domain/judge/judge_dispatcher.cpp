@@ -16,6 +16,10 @@
 namespace judge {
 namespace {
 
+constexpr int kStaleSubmissionSeconds = 30 * 60;
+constexpr int kMaxSubmissionAttempts = 3;
+constexpr auto kStaleRecoveryInterval = std::chrono::seconds{30};
+
 std::string host_name() {
     char buffer[256]{};
     if (gethostname(buffer, sizeof(buffer) - 1) != 0) {
@@ -64,9 +68,20 @@ void JudgeDispatcher::workerLoop(int slot) {
     const auto worker_id = host_name() + "-" + std::to_string(::getpid()) + "-" + std::to_string(slot);
     JudgeRepository repository{pool_};
     JudgeService service{repository, SandboxRunner{slot}, worker_id};
+    auto next_stale_recovery = std::chrono::steady_clock::now();
 
     while (!stopping_) {
         try {
+            if (slot == 0 && std::chrono::steady_clock::now() >= next_stale_recovery) {
+                const auto recovered = repository.recoverStaleJudgingSubmissions(
+                    kStaleSubmissionSeconds,
+                    kMaxSubmissionAttempts
+                );
+                if (recovered > 0) {
+                    spdlog::warn("recovered {} stale judge submission(s)", recovered);
+                }
+                next_stale_recovery = std::chrono::steady_clock::now() + kStaleRecoveryInterval;
+            }
             const bool processed = service.processNextSubmission();
             if (!processed) {
                 std::this_thread::sleep_for(std::chrono::milliseconds{100});

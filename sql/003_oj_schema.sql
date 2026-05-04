@@ -189,6 +189,8 @@ CREATE INDEX IF NOT EXISTS idx_submissions_problem_finished ON submissions(probl
 CREATE INDEX IF NOT EXISTS idx_submissions_user_submitted ON submissions(user_id, submitted_at DESC);
 CREATE INDEX IF NOT EXISTS idx_submissions_queue ON submissions(status, submitted_at, id)
 WHERE status = 'queued';
+CREATE INDEX IF NOT EXISTS idx_submissions_judging_locked_at ON submissions(locked_at, id)
+WHERE status = 'judging';
 CREATE INDEX IF NOT EXISTS idx_submission_results_submission ON submission_results(submission_id, order_index);
 
 CREATE INDEX IF NOT EXISTS idx_training_goals_user ON training_goals(user_id, created_at DESC);

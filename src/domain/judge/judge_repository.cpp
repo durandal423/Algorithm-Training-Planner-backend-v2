@@ -418,6 +418,63 @@ std::optional<Submission> JudgeRepository::fetchNextQueuedSubmission(const std::
     return submission;
 }
 
+bool JudgeRepository::refreshSubmissionLease(long long id, const std::string& worker_id) const {
+    auto lease = pool_.acquire();
+    pqxx::work tx{lease.connection()};
+    const auto result = tx.exec(
+        R"SQL(
+            UPDATE submissions
+            SET locked_at = now()
+            WHERE id = $1
+              AND status = 'judging'
+              AND locked_by = $2
+        )SQL",
+        pqxx::params{id, worker_id}
+    );
+    tx.commit();
+    return result.affected_rows() > 0;
+}
+
+int JudgeRepository::recoverStaleJudgingSubmissions(
+    int stale_after_seconds,
+    int max_attempts
+) const {
+    auto lease = pool_.acquire();
+    pqxx::work tx{lease.connection()};
+    const auto rows = tx.exec(
+        R"SQL(
+            UPDATE submissions
+            SET status = CASE WHEN attempt_count >= $2 THEN 'failed' ELSE 'queued' END,
+                verdict = CASE WHEN attempt_count >= $2 THEN 'JE' ELSE NULL END,
+                score = 0,
+                compile_stdout = NULL,
+                compile_stderr = CASE
+                    WHEN attempt_count >= $2 THEN 'judge worker lease expired'
+                    ELSE NULL
+                END,
+                compile_time_ms = NULL,
+                max_time_ms = NULL,
+                max_memory_kb = NULL,
+                locked_by = NULL,
+                locked_at = NULL,
+                started_at = CASE WHEN attempt_count >= $2 THEN started_at ELSE NULL END,
+                finished_at = CASE WHEN attempt_count >= $2 THEN now() ELSE NULL END
+            WHERE status = 'judging'
+              AND locked_at IS NOT NULL
+              AND locked_at < now() - ($1::integer * interval '1 second')
+            RETURNING id, status, verdict
+        )SQL",
+        pqxx::params{stale_after_seconds, max_attempts}
+    );
+    for (const auto& row : rows) {
+        if (row["status"].as<std::string>() == "failed") {
+            updateLatestPlanItemFromSubmission(tx, row["id"].as<long long>(), row["verdict"].as<std::string>());
+        }
+    }
+    tx.commit();
+    return static_cast<int>(rows.size());
+}
+
 bool JudgeRepository::resetSubmissionForRejudge(long long id) const {
     auto lease = pool_.acquire();
     pqxx::work tx{lease.connection()};
@@ -441,6 +498,7 @@ bool JudgeRepository::resetSubmissionForRejudge(long long id) const {
                 started_at = NULL,
                 finished_at = NULL
             WHERE id = $1
+              AND status IN ('completed', 'failed', 'canceled')
         )SQL",
         pqxx::params{id}
     );
@@ -448,16 +506,27 @@ bool JudgeRepository::resetSubmissionForRejudge(long long id) const {
     return result.affected_rows() > 0;
 }
 
-void JudgeRepository::insertSubmissionResult(const SubmissionResult& result) const {
+bool JudgeRepository::insertSubmissionResult(
+    const SubmissionResult& result,
+    const std::string& worker_id
+) const {
     auto lease = pool_.acquire();
     pqxx::work tx{lease.connection()};
-    tx.exec(
+    const auto inserted = tx.exec(
         R"SQL(
             INSERT INTO submission_results(
                 submission_id, test_case_id, order_index, status, verdict,
                 time_ms, memory_kb, exit_code, stdout_sample, stderr_sample, message
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+            WHERE EXISTS (
+                SELECT 1
+                FROM submissions
+                WHERE id = $1
+                  AND status = 'judging'
+                  AND locked_by = $12
+            )
+            RETURNING id
         )SQL",
         pqxx::params{
             result.submission_id,
@@ -470,14 +539,17 @@ void JudgeRepository::insertSubmissionResult(const SubmissionResult& result) con
             result.exit_code,
             result.stdout_sample,
             result.stderr_sample,
-            result.message
+            result.message,
+            worker_id
         }
-    ).no_rows();
+    );
     tx.commit();
+    return !inserted.empty();
 }
 
-void JudgeRepository::completeSubmission(
+bool JudgeRepository::completeSubmission(
     long long id,
+    const std::string& worker_id,
     const std::string& verdict,
     int score,
     const std::string& compile_stdout,
@@ -488,24 +560,28 @@ void JudgeRepository::completeSubmission(
 ) const {
     auto lease = pool_.acquire();
     pqxx::work tx{lease.connection()};
-    tx.exec(
+    const auto updated = tx.exec(
         R"SQL(
             UPDATE submissions
             SET status = 'completed',
-                verdict = $2,
-                score = $3,
-                compile_stdout = $4,
-                compile_stderr = $5,
-                compile_time_ms = $6,
-                max_time_ms = $7,
-                max_memory_kb = $8,
+                verdict = $3,
+                score = $4,
+                compile_stdout = $5,
+                compile_stderr = $6,
+                compile_time_ms = $7,
+                max_time_ms = $8,
+                max_memory_kb = $9,
                 locked_by = NULL,
                 locked_at = NULL,
                 finished_at = now()
             WHERE id = $1
+              AND status = 'judging'
+              AND locked_by = $2
+            RETURNING id
         )SQL",
         pqxx::params{
             id,
+            worker_id,
             verdict,
             score,
             compile_stdout,
@@ -514,13 +590,19 @@ void JudgeRepository::completeSubmission(
             max_time_ms,
             max_memory_kb
         }
-    ).no_rows();
+    );
+    if (updated.empty()) {
+        tx.commit();
+        return false;
+    }
     updateLatestPlanItemFromSubmission(tx, id, verdict);
     tx.commit();
+    return true;
 }
 
-void JudgeRepository::failSubmission(
+bool JudgeRepository::failSubmission(
     long long id,
+    const std::string& worker_id,
     const std::string& verdict,
     const std::string& message,
     const std::string& compile_stdout,
@@ -528,28 +610,37 @@ void JudgeRepository::failSubmission(
 ) const {
     auto lease = pool_.acquire();
     pqxx::work tx{lease.connection()};
-    tx.exec(
+    const auto updated = tx.exec(
         R"SQL(
             UPDATE submissions
             SET status = 'failed',
-                verdict = $2,
+                verdict = $3,
                 score = 0,
-                compile_stdout = $3,
-                compile_stderr = $4,
+                compile_stdout = $4,
+                compile_stderr = $5,
                 locked_by = NULL,
                 locked_at = NULL,
                 finished_at = now()
             WHERE id = $1
+              AND status = 'judging'
+              AND locked_by = $2
+            RETURNING id
         )SQL",
         pqxx::params{
             id,
+            worker_id,
             verdict,
             compile_stdout,
             compile_stderr.empty() ? message : compile_stderr
         }
-    ).no_rows();
+    );
+    if (updated.empty()) {
+        tx.commit();
+        return false;
+    }
     updateLatestPlanItemFromSubmission(tx, id, verdict);
     tx.commit();
+    return true;
 }
 
 std::vector<SubmissionResult> JudgeRepository::loadResults(

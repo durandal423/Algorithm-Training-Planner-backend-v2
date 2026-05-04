@@ -33,10 +33,8 @@ judge::JudgeConfig config_from_json(long long problem_id, const nlohmann::json& 
     config.problem_id = problem_id;
     config.enabled = body.value("enabled", false);
     config.language = body.value("language", std::string{"cpp"});
-    config.compile_command_template =
-        body.value("compileCommandTemplate", std::optional<std::string>{});
-    config.run_command_template =
-        body.value("runCommandTemplate", std::optional<std::string>{});
+    config.compile_command_template = body.value("compileCommandTemplate", std::optional<std::string>{});
+    config.run_command_template = body.value("runCommandTemplate", std::optional<std::string>{});
     config.time_limit_ms = body.value("timeLimitMs", 1000);
     config.memory_limit_mb = body.value("memoryLimitMb", 256);
     config.output_limit_kb = body.value("outputLimitKb", 1024);

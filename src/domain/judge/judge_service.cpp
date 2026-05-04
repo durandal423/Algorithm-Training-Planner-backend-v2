@@ -70,14 +70,19 @@ bool JudgeService::processNextSubmission() {
     try {
         const auto config = repository_.getConfig(submission->problem_id);
         if (!config || !config->enabled) {
-            repository_.failSubmission(submission->id, "JE", "judge config is missing or disabled");
+            repository_.failSubmission(
+                submission->id,
+                worker_id_,
+                "JE",
+                "judge config is missing or disabled"
+            );
             std::filesystem::remove_all(work_dir);
             return true;
         }
 
         const auto test_cases = repository_.listJudgingTestCases(submission->problem_id);
         if (test_cases.empty()) {
-            repository_.failSubmission(submission->id, "JE", "no judge test cases configured");
+            repository_.failSubmission(submission->id, worker_id_, "JE", "no judge test cases configured");
             std::filesystem::remove_all(work_dir);
             return true;
         }
@@ -87,6 +92,7 @@ bool JudgeService::processNextSubmission() {
             const auto verdict = compile.system_error ? "JE" : "CE";
             repository_.completeSubmission(
                 submission->id,
+                worker_id_,
                 verdict,
                 0,
                 compile.stdout_sample,
@@ -94,6 +100,15 @@ bool JudgeService::processNextSubmission() {
                 compile.time_ms,
                 std::nullopt,
                 std::nullopt
+            );
+            std::filesystem::remove_all(work_dir);
+            return true;
+        }
+        if (!repository_.refreshSubmissionLease(submission->id, worker_id_)) {
+            spdlog::warn(
+                "judge submission lease lost after compile (submission_id={}, worker={})",
+                submission->id,
+                worker_id_
             );
             std::filesystem::remove_all(work_dir);
             return true;
@@ -114,12 +129,38 @@ bool JudgeService::processNextSubmission() {
                 result.status = "failed";
                 result.verdict = "JE";
                 result.message = "test case has no expected output";
-                repository_.insertSubmissionResult(result);
+                if (!repository_.insertSubmissionResult(result, worker_id_)) {
+                    spdlog::warn(
+                        "judge submission lease lost while recording result (submission_id={}, worker={})",
+                        submission->id,
+                        worker_id_
+                    );
+                    std::filesystem::remove_all(work_dir);
+                    return true;
+                }
                 final_verdict = "JE";
                 break;
             }
 
+            if (!repository_.refreshSubmissionLease(submission->id, worker_id_)) {
+                spdlog::warn(
+                    "judge submission lease lost before test case run (submission_id={}, worker={})",
+                    submission->id,
+                    worker_id_
+                );
+                std::filesystem::remove_all(work_dir);
+                return true;
+            }
             const auto run = runner_.run(*config, test_case, work_dir, run_index++);
+            if (!repository_.refreshSubmissionLease(submission->id, worker_id_)) {
+                spdlog::warn(
+                    "judge submission lease lost after test case run (submission_id={}, worker={})",
+                    submission->id,
+                    worker_id_
+                );
+                std::filesystem::remove_all(work_dir);
+                return true;
+            }
             max_time_ms = std::max(max_time_ms, run.time_ms);
             max_memory_kb = std::max(max_memory_kb, run.memory_kb);
 
@@ -150,7 +191,18 @@ bool JudgeService::processNextSubmission() {
                 }
             }
 
-            repository_.insertSubmissionResult(make_result(*submission, test_case, verdict, run, message));
+            if (!repository_.insertSubmissionResult(
+                    make_result(*submission, test_case, verdict, run, message),
+                    worker_id_
+                )) {
+                spdlog::warn(
+                    "judge submission lease lost while recording result (submission_id={}, worker={})",
+                    submission->id,
+                    worker_id_
+                );
+                std::filesystem::remove_all(work_dir);
+                return true;
+            }
             if (verdict == "AC") {
                 score += test_case.points;
             } else {
@@ -159,8 +211,9 @@ bool JudgeService::processNextSubmission() {
             }
         }
 
-        repository_.completeSubmission(
+        if (!repository_.completeSubmission(
             submission->id,
+            worker_id_,
             final_verdict,
             score,
             compile.stdout_sample,
@@ -168,7 +221,15 @@ bool JudgeService::processNextSubmission() {
             compile.time_ms,
             max_time_ms,
             max_memory_kb
-        );
+        )) {
+            spdlog::warn(
+                "judge submission lease lost while completing submission (submission_id={}, worker={})",
+                submission->id,
+                worker_id_
+            );
+            std::filesystem::remove_all(work_dir);
+            return true;
+        }
         std::filesystem::remove_all(work_dir);
         spdlog::info(
             "judge submission completed (submission_id={}, verdict={}, score={})",
@@ -178,7 +239,7 @@ bool JudgeService::processNextSubmission() {
         );
         return true;
     } catch (const std::exception& error) {
-        repository_.failSubmission(submission->id, "JE", error.what());
+        repository_.failSubmission(submission->id, worker_id_, "JE", error.what());
         std::filesystem::remove_all(work_dir);
         spdlog::error("judge submission failed (submission_id={}): {}", submission->id, error.what());
         return true;

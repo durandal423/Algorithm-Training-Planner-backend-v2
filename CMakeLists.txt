@@ -127,6 +127,10 @@ add_executable(Algorithm-judge-worker
     src/domain/judge/judge_service.hpp
     src/domain/judge/output_comparator.cpp
     src/domain/judge/output_comparator.hpp
+    src/domain/judge/docker_sandbox_pool.cpp
+    src/domain/judge/docker_sandbox_pool.hpp
+    src/domain/judge/sandbox_process.cpp
+    src/domain/judge/sandbox_process.hpp
     src/domain/judge/sandbox_runner.cpp
     src/domain/judge/sandbox_runner.hpp
 )

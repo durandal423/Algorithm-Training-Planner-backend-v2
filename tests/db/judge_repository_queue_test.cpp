@@ -90,3 +90,130 @@ TEST_CASE("fetchNextQueuedSubmission does not hand out the same job twice") {
     REQUIRE(picked_ids == expected_ids);
     REQUIRE_FALSE(repository.fetchNextQueuedSubmission("extra-worker").has_value());
 }
+
+TEST_CASE("submission completion requires the owning judge worker lease") {
+    if (!test_support::dbTestsEnabled()) {
+        SUCCEED("Set RUN_DB_TESTS=1 to run PostgreSQL judge queue tests.");
+        return;
+    }
+
+    test_support::ensureDatabaseReady();
+    const auto code = test_support::uniqueName("DB_LEASE_");
+    struct Cleanup {
+        std::string code;
+        ~Cleanup() {
+            try {
+                test_support::deleteProblemByCode(code);
+            } catch (...) {
+            }
+        }
+    } cleanup{code};
+
+    const auto problem_id = create_problem(code);
+    ConnectionPool pool{Database::appConninfo(), 4};
+    judge::JudgeRepository repository{pool};
+
+    judge::Submission submission;
+    submission.problem_id = problem_id;
+    submission.language = "cpp";
+    submission.source_code = "int main(){return 0;}";
+    const auto submission_id = repository.createSubmission(submission);
+
+    const auto picked = repository.fetchNextQueuedSubmission("worker-a");
+    REQUIRE(picked);
+    REQUIRE(picked->id == submission_id);
+
+    judge::SubmissionResult result;
+    result.submission_id = submission_id;
+    result.order_index = 1;
+    result.status = "completed";
+    result.verdict = "AC";
+    result.message = "accepted";
+
+    REQUIRE_FALSE(repository.insertSubmissionResult(result, "worker-b"));
+    REQUIRE(repository.insertSubmissionResult(result, "worker-a"));
+    REQUIRE_FALSE(repository.completeSubmission(
+        submission_id,
+        "worker-b",
+        "AC",
+        1,
+        {},
+        {},
+        1,
+        1,
+        0
+    ));
+    REQUIRE(repository.completeSubmission(
+        submission_id,
+        "worker-a",
+        "AC",
+        1,
+        {},
+        {},
+        1,
+        1,
+        0
+    ));
+}
+
+TEST_CASE("stale judging submissions are requeued and eventually failed") {
+    if (!test_support::dbTestsEnabled()) {
+        SUCCEED("Set RUN_DB_TESTS=1 to run PostgreSQL judge queue tests.");
+        return;
+    }
+
+    test_support::ensureDatabaseReady();
+    const auto code = test_support::uniqueName("DB_STALE_");
+    struct Cleanup {
+        std::string code;
+        ~Cleanup() {
+            try {
+                test_support::deleteProblemByCode(code);
+            } catch (...) {
+            }
+        }
+    } cleanup{code};
+
+    const auto problem_id = create_problem(code);
+    ConnectionPool pool{Database::appConninfo(), 4};
+    judge::JudgeRepository repository{pool};
+
+    judge::Submission submission;
+    submission.problem_id = problem_id;
+    submission.language = "cpp";
+    submission.source_code = "int main(){return 0;}";
+    const auto submission_id = repository.createSubmission(submission);
+
+    REQUIRE(repository.fetchNextQueuedSubmission("worker-a"));
+    {
+        pqxx::connection conn{Database::appConninfo()};
+        pqxx::work tx{conn};
+        tx.exec(
+            "UPDATE submissions SET locked_at = now() - interval '1 hour' WHERE id = $1",
+            pqxx::params{submission_id}
+        ).no_rows();
+        tx.commit();
+    }
+
+    REQUIRE(repository.recoverStaleJudgingSubmissions(1, 3) == 1);
+    auto requeued = repository.getSubmission(submission_id);
+    REQUIRE(requeued);
+    REQUIRE(requeued->status == "queued");
+
+    REQUIRE(repository.fetchNextQueuedSubmission("worker-b"));
+    {
+        pqxx::connection conn{Database::appConninfo()};
+        pqxx::work tx{conn};
+        tx.exec(
+            "UPDATE submissions SET locked_at = now() - interval '1 hour' WHERE id = $1",
+            pqxx::params{submission_id}
+        ).no_rows();
+        tx.commit();
+    }
+
+    REQUIRE(repository.recoverStaleJudgingSubmissions(1, 2) == 1);
+    const auto failed = repository.getSubmission(submission_id);
+    REQUIRE(failed);
+    REQUIRE(failed->status == "failed");
+    REQUIRE(failed->verdict == "JE");
+}

@@ -26,11 +26,14 @@ public:
     std::optional<Submission> getSubmission(long long id) const;
     std::vector<Submission> listSubmissions(const SubmissionFilter& filter) const;
     std::optional<Submission> fetchNextQueuedSubmission(const std::string& worker_id) const;
+    bool refreshSubmissionLease(long long id, const std::string& worker_id) const;
+    int recoverStaleJudgingSubmissions(int stale_after_seconds, int max_attempts) const;
     bool resetSubmissionForRejudge(long long id) const;
 
-    void insertSubmissionResult(const SubmissionResult& result) const;
-    void completeSubmission(
+    bool insertSubmissionResult(const SubmissionResult& result, const std::string& worker_id) const;
+    bool completeSubmission(
         long long id,
+        const std::string& worker_id,
         const std::string& verdict,
         int score,
         const std::string& compile_stdout,
@@ -39,8 +42,9 @@ public:
         std::optional<int> max_time_ms,
         std::optional<int> max_memory_kb
     ) const;
-    void failSubmission(
+    bool failSubmission(
         long long id,
+        const std::string& worker_id,
         const std::string& verdict,
         const std::string& message,
         const std::string& compile_stdout = {},
