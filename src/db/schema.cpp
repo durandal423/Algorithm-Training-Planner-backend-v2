@@ -42,51 +42,12 @@ struct MigrationScript {
 };
 
 constexpr std::array kMigrations{
-    MigrationScript{
-        1,
-        "001_schema.sql",
-        "create core auth and problem schema"
-    },
-    MigrationScript{
-        2,
-        "002_seed.sql",
-        "seed initial data"
-    },
-    MigrationScript{
-        3,
-        "003_oj_schema.sql",
-        "create judge training and admin schema"
-    },
-    MigrationScript{
-        5,
-        "005_background_tasks.sql",
-        "create background task schema"
-    },
-    MigrationScript{
-        6,
-        "006_judge_queue_leases.sql",
-        "index judge queue leases"
-    },
-    MigrationScript{
-        7,
-        "007_background_task_queue.sql",
-        "add durable background task queue metadata"
-    },
-    MigrationScript{
-        8,
-        "008_seed_generated_problem_tags.sql",
-        "backfill generated training problem tags"
-    },
-    MigrationScript{
-        9,
-        "009_seed_judge_fixtures.sql",
-        "seed judge configs and test cases"
-    },
-    MigrationScript{
-        10,
-        "010_seed_admin_user.sql",
-        "seed default admin user"
-    }
+    MigrationScript{1, "migrations/001_core_auth_problem_schema.sql", "create core auth and problem schema"},
+    MigrationScript{2, "seeds/002_problem_catalog.sql", "seed problem catalog and tags"},
+    MigrationScript{3, "migrations/003_judge_training_admin_schema.sql", "create judge training and admin schema"},
+    MigrationScript{4, "migrations/004_background_tasks.sql", "create background task queue schema"},
+    MigrationScript{5, "seeds/005_judge_sample_fixtures.sql", "seed sample judge configs and test cases"},
+    MigrationScript{6,"seeds/006_default_admin_user.sql","seed default admin user"}
 };
 
 std::filesystem::path sql_path(std::string_view filename) {

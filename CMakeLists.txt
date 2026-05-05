@@ -154,7 +154,9 @@ add_executable(Algorithm-task-worker
     src/db/schema.cpp
     src/db/database.cpp
     src/db/database.hpp
-    src/algorithms/training_plan_algorithms.cpp
+    src/algorithms/training_plan_window.cpp
+    src/algorithms/training_plan_dp.cpp
+    src/algorithms/training_plan_bruteforce.cpp
     src/algorithms/training_plan_algorithms.hpp
     src/domain/task/task_models.hpp
     src/domain/task/task_repository.hpp
@@ -204,7 +206,9 @@ add_executable(project-tests
     tests/db/problem_repository_test.cpp
     tests/db/task_queue_repository_test.cpp
     tests/db/task_repository_test.cpp
-    src/algorithms/training_plan_algorithms.cpp
+    src/algorithms/training_plan_window.cpp
+    src/algorithms/training_plan_dp.cpp
+    src/algorithms/training_plan_bruteforce.cpp
     src/algorithms/training_plan_algorithms.hpp
     src/db/connection_pool.cpp
     src/db/connection_pool.hpp

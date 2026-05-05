@@ -4,6 +4,7 @@ build/
 vcpkg_installed/
 .judge-work/
 try-crow-tasks/
+backend-load-test-gui/
 
 .clang-format
 .env

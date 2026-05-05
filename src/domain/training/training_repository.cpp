@@ -2,6 +2,7 @@
 #include "api/http_json.hpp"
 
 #include <pqxx/pqxx>
+#include <spdlog/spdlog.h>
 
 namespace training {
 namespace {
@@ -57,6 +58,11 @@ long long TrainingRepository::createGoal(const TrainingGoal& goal) const {
     ).one_field().as<long long>();
     replaceGoalTags(tx, id, goal.tag_names);
     tx.commit();
+    spdlog::debug("created training goal {} for user {}, info: {}", 
+        id, 
+        goal.user_id, 
+        goal.name + ", targetCount=" + std::to_string(goal.target_count) + ", timeBudget=" + std::to_string(goal.time_budget_minutes)
+    );
     return id;
 }
 

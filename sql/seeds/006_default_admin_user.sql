@@ -1,3 +1,5 @@
+-- Default admin seed. Keep this migration last so auth tables already exist and
+-- all schema-level role/status constraints are in place.
 WITH existing AS (
     UPDATE users
     SET username = 'admin',

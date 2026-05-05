@@ -107,8 +107,8 @@ CREATE TABLE IF NOT EXISTS training_goals (
     weak_tag_weight INTEGER NOT NULL DEFAULT 15,
     estimated_time_weight INTEGER NOT NULL DEFAULT 1,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT chk_training_goals_target_count CHECK (target_count > 0),
-    CONSTRAINT chk_training_goals_time_budget CHECK (time_budget_minutes > 0),
+    CONSTRAINT chk_training_goals_target_count CHECK (target_count > 0 AND target_count <= 30),
+    CONSTRAINT chk_training_goals_time_budget CHECK (time_budget_minutes > 0 AND time_budget_minutes <= 480),
     CONSTRAINT chk_training_goals_difficulty_range CHECK (
         difficulty_min IS NULL OR difficulty_max IS NULL OR difficulty_min <= difficulty_max
     )
