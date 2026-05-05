@@ -120,6 +120,7 @@ nlohmann::json brute_force_algorithm_summary(
     auto optimization_result = optimization_result_summary(brute_force.optimized, elapsed_us);
     optimization_result["combinationsEvaluated"] = brute_force.evaluated_combination_count;
     optimization_result["combinationLimit"] = nullptr;
+    optimization_result["consideredCandidateCount"] = brute_force.considered_candidate_count;
 
     return {
         {"algorithm", "bruteforce"},

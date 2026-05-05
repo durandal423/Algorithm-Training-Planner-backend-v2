@@ -136,8 +136,8 @@ TEST_CASE("optimizeTrainingPlanByBruteForce enumerates feasible combinations") {
     const auto selected_goal = goal();
     const auto brute_force = training::optimizeTrainingPlanByBruteForce(candidates, selected_goal);
 
-    REQUIRE(brute_force.considered_candidate_count == 4);
-    REQUIRE(brute_force.evaluated_combination_count > 0);
+    REQUIRE(brute_force.considered_candidate_count == 3);
+    REQUIRE(brute_force.evaluated_combination_count == 6);
     REQUIRE(brute_force.optimized.items.size() == 2);
     REQUIRE(brute_force.optimized.total_estimated_minutes <= selected_goal.time_budget_minutes);
     REQUIRE(brute_force.optimized.covered_tags.size() == 2);
@@ -146,10 +146,59 @@ TEST_CASE("optimizeTrainingPlanByBruteForce enumerates feasible combinations") {
     }
 }
 
-TEST_CASE("training plan algorithms support all tags and target count thirty") {
+TEST_CASE("optimizeTrainingPlanByBruteForce uses a filtered difficulty window") {
+    std::vector<training::TrainingProblemCandidate> candidates;
+    for (int i = 0; i < 24; ++i) {
+        candidates.push_back(candidate(
+            i + 1,
+            1000 + i,
+            10,
+            {i % 2 == 0 ? "动态规划" : "双指针"}
+        ));
+    }
+    candidates.push_back(candidate(101, 1300, 40, {"动态规划", "双指针"}, 100));
+    candidates.push_back(candidate(102, 1301, 40, {"动态规划", "双指针"}, 100));
+
+    auto selected_goal = goal();
+    selected_goal.time_budget_minutes = 90;
+
+    const auto brute_force = training::optimizeTrainingPlanByBruteForce(candidates, selected_goal);
+
+    REQUIRE(brute_force.considered_candidate_count < static_cast<int>(candidates.size()));
+    REQUIRE(brute_force.optimized.items.size() == 2);
+
+    bool selected_first_late_candidate = false;
+    bool selected_second_late_candidate = false;
+    for (const auto& item : brute_force.optimized.items) {
+        selected_first_late_candidate |= item.problem.id == 101;
+        selected_second_late_candidate |= item.problem.id == 102;
+    }
+    REQUIRE_FALSE(selected_first_late_candidate);
+    REQUIRE_FALSE(selected_second_late_candidate);
+}
+
+TEST_CASE("optimizeTrainingPlanByBruteForce has no hidden target cap") {
+    std::vector<training::TrainingProblemCandidate> candidates;
+    for (int i = 0; i < 13; ++i) {
+        candidates.push_back(candidate(i + 1, 1000 + i, 10, {"动态规划"}));
+    }
+
+    auto selected_goal = goal();
+    selected_goal.target_count = 13;
+    selected_goal.time_budget_minutes = 180;
+    selected_goal.tag_names = {"动态规划"};
+
+    const auto brute_force = training::optimizeTrainingPlanByBruteForce(candidates, selected_goal);
+
+    REQUIRE(brute_force.considered_candidate_count == 13);
+    REQUIRE(brute_force.evaluated_combination_count == 8191);
+    REQUIRE(brute_force.optimized.items.size() == 13);
+}
+
+TEST_CASE("training plan algorithms support all tags and target count twelve") {
     const auto tags = all_tags();
     std::vector<training::TrainingProblemCandidate> candidates;
-    for (int i = 0; i < 1000; ++i) {
+    for (int i = 0; i < 12; ++i) {
         candidates.push_back(candidate(
             i + 1,
             800 + i * 2,
@@ -164,18 +213,18 @@ TEST_CASE("training plan algorithms support all tags and target count thirty") {
     }
 
     auto selected_goal = goal();
-    selected_goal.target_count = 30;
-    selected_goal.time_budget_minutes = 480;
+    selected_goal.target_count = 12;
+    selected_goal.time_budget_minutes = 240;
     selected_goal.tag_names = tags;
 
     const auto window = training::selectStableDifficultyWindow(candidates, selected_goal);
     const auto dp_plan = training::optimizeTrainingPlanByDP(window, selected_goal);
     const auto brute_force = training::optimizeTrainingPlanByBruteForce(candidates, selected_goal);
 
-    REQUIRE(dp_plan.items.size() == 30);
+    REQUIRE(dp_plan.items.size() == 12);
     REQUIRE(dp_plan.total_estimated_minutes <= selected_goal.time_budget_minutes);
     REQUIRE(dp_plan.covered_tags.size() == tags.size());
-    REQUIRE(brute_force.optimized.items.size() == 30);
+    REQUIRE(brute_force.optimized.items.size() == 12);
     REQUIRE(brute_force.optimized.total_estimated_minutes <= selected_goal.time_budget_minutes);
     REQUIRE(brute_force.optimized.covered_tags.size() == tags.size());
     REQUIRE(brute_force.evaluated_combination_count > 0);

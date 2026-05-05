@@ -158,16 +158,16 @@ JOIN problems p ON p.code = mapping.problem_code
 JOIN tags t ON t.name = mapping.tag_name
 ON CONFLICT DO NOTHING;
 
--- Synthetic practice bank: keep hand-written examples above, then fill T0033..T1000
--- with deterministic generated rows so local/dev seed data has enough volume for
--- recommendation, pagination, and training-plan experiments.
+-- Synthetic practice bank: keep hand-written examples above, then fill
+-- T0000000033..T0001000000 with deterministic generated rows for recommendation,
+-- pagination, and training-plan experiments.
 WITH generated_problem_seed AS (
     SELECT
-        'T' || lpad(series.n::text, 4, '0') AS code,
+        'T' || lpad(series.n::text, 10, '0') AS code,
         vocab.title_prefixes[((series.n - 1) % array_length(vocab.title_prefixes, 1)) + 1] ||
-            ' ' || lpad(series.n::text, 4, '0') AS title,
+            ' ' || lpad(series.n::text, 10, '0') AS title,
         vocab.platforms[((series.n - 1) % array_length(vocab.platforms, 1)) + 1] AS source_platform,
-        'https://example.com/problems/T' || lpad(series.n::text, 4, '0') AS source_url,
+        'https://example.com/problems/T' || lpad(series.n::text, 10, '0') AS source_url,
         800 + ((series.n * 137) % 1501) AS difficulty,
         15 + ((series.n * 7) % 51) AS estimated_minutes,
         '自动生成的训练题，侧重' ||
@@ -175,7 +175,7 @@ WITH generated_problem_seed AS (
             '、' ||
             vocab.tags[((series.n + 3) % array_length(vocab.tags, 1)) + 1] ||
             '与基础建模。' AS description
-    FROM generate_series(33, 1000) AS series(n)
+    FROM generate_series(33, 1000000) AS series(n)
     CROSS JOIN (
         SELECT
             ARRAY[
@@ -281,7 +281,7 @@ generated_problem_rows AS (
         code,
         substring(code FROM 2)::integer AS n
     FROM problems
-    WHERE code ~ '^T[0-9]{4}$'
+    WHERE code ~ '^T[0-9]{10}$'
 ),
 generated_problem_tag_seed AS (
     SELECT
@@ -295,7 +295,7 @@ generated_problem_tag_seed AS (
             (tag_vocab.tags[((generated_problem_rows.n + 3) % array_length(tag_vocab.tags, 1)) + 1]),
             (tag_vocab.tags[((generated_problem_rows.n + 7) % array_length(tag_vocab.tags, 1)) + 1])
     ) AS selected(tag_name)
-    WHERE generated_problem_rows.n BETWEEN 33 AND 1000
+    WHERE generated_problem_rows.n BETWEEN 33 AND 1000000
 )
 INSERT INTO problem_tags(problem_id, tag_id)
 SELECT p.id, t.id

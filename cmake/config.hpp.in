@@ -25,7 +25,7 @@ inline constexpr int TASK_WORKER_DEFAULT_THREAD_COUNT = 2;
 inline constexpr int TASK_WORKER_TRAINING_THREAD_COUNT = 2;
 inline constexpr int TASK_WORKER_JUDGE_CREATE_THREAD_COUNT = 4;
 
-inline constexpr int TRAINING_GOAL_MAX_TARGET_COUNT = 30;
+inline constexpr int TRAINING_GOAL_MAX_TARGET_COUNT = 12;
 inline constexpr int TRAINING_GOAL_MAX_TIME_BUDGET_MINUTES = 480;
 inline constexpr int TRAINING_GOAL_MAX_TAGS = 20;
 

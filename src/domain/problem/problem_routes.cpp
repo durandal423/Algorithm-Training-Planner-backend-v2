@@ -62,6 +62,16 @@ RouteRegistration problemRoutesRegistration([](App& app, runtime::ApplicationCon
         return api::json_response(200, {{"items", repository.listProblems(filter)}});
     });
 
+    CROW_ROUTE(app, "/api/problems/count")
+    .methods(crow::HTTPMethod::Get)
+    ([&context](const crow::request& req) -> crow::response {
+        auto& connection_pool = context.apiPool();
+        problem::ProblemRepository repository{connection_pool};
+        return api::json_response(200, {
+            {"count", repository.countProblems(is_admin(connection_pool, req))}
+        });
+    });
+
     CROW_ROUTE(app, "/api/problems/<int>")
     .methods(crow::HTTPMethod::Get)
     ([&context](const crow::request& req, int id) -> crow::response {

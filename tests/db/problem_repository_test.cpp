@@ -20,6 +20,12 @@ problem::Problem make_problem(const std::string& code, const std::string& title)
     return problem;
 }
 
+problem::Problem make_hidden_problem(const std::string& code, const std::string& title) {
+    auto problem = make_problem(code, title);
+    problem.visibility = "hidden";
+    return problem;
+}
+
 std::vector<std::string> codes_from(const std::vector<problem::ProblemSummary>& problems) {
     std::vector<std::string> codes;
     codes.reserve(problems.size());
@@ -43,6 +49,7 @@ TEST_CASE("problem search filters by tag name, id, and comma-separated tag value
     const auto greedy_tag = prefix + "_Greedy";
     const auto graph_code = prefix + "_GRAPH";
     const auto greedy_code = prefix + "_GREEDY";
+    const auto hidden_code = prefix + "_HIDDEN";
 
     struct Cleanup {
         std::vector<std::string> codes;
@@ -67,10 +74,12 @@ TEST_CASE("problem search filters by tag name, id, and comma-separated tag value
             } catch (...) {
             }
         }
-    } cleanup{{graph_code, greedy_code}, {graph_tag, dp_tag, greedy_tag}};
+    } cleanup{{graph_code, greedy_code, hidden_code}, {graph_tag, dp_tag, greedy_tag}};
 
     ConnectionPool pool{Database::appConninfo(), 4};
     problem::ProblemRepository repository{pool};
+    const auto public_count_before = repository.countProblems(false);
+    const auto all_count_before = repository.countProblems(true);
 
     const auto graph_id = repository.createProblem(
         make_problem(graph_code, "Graph Search Exercise"),
@@ -80,6 +89,13 @@ TEST_CASE("problem search filters by tag name, id, and comma-separated tag value
         make_problem(greedy_code, "Greedy Exercise"),
         {greedy_tag}
     );
+    repository.createProblem(
+        make_hidden_problem(hidden_code, "Hidden Exercise"),
+        {graph_tag}
+    );
+
+    REQUIRE(repository.countProblems(false) == public_count_before + 2);
+    REQUIRE(repository.countProblems(true) == all_count_before + 3);
 
     const auto graph_problem = repository.getProblem(graph_id, true);
     REQUIRE(graph_problem.has_value());

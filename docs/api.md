@@ -540,6 +540,20 @@ GET /api/problems?q=P12134&tag=滑动窗口&limit=20&offset=0
 
 说明：列表项为 `ProblemSummary`，不包含 `description`、`inputFormat`、`outputFormat`、`sampleInput`、`sampleOutput`、`hint`。
 
+### 题目数量
+
+`GET /api/problems/count`
+
+权限：公开。管理员登录时会统计 hidden 题目；未登录或普通用户只统计 public 题目。
+
+响应 `200`：
+
+```json
+{
+  "count": 1000002
+}
+```
+
 ### 题目详情
 
 `GET /api/problems/<id>`

@@ -77,6 +77,21 @@ std::vector<ProblemSummary> ProblemRepository::listProblems(const ProblemFilter&
     return problems;
 }
 
+long long ProblemRepository::countProblems(bool include_hidden) const {
+    auto lease = pool_.acquire();
+    pqxx::work tx{lease.connection()};
+    const auto count = tx.exec(
+        R"SQL(
+            SELECT COUNT(*)::bigint
+            FROM problems
+            WHERE ($1 OR visibility = 'public')
+        )SQL",
+        pqxx::params{include_hidden}
+    ).one_field().as<long long>();
+    tx.commit();
+    return count;
+}
+
 std::optional<Problem> ProblemRepository::getProblem(long long id, bool include_hidden) const {
     auto lease = pool_.acquire();
     pqxx::work tx{lease.connection()};

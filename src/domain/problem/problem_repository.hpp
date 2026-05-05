@@ -63,6 +63,7 @@ public:
     explicit ProblemRepository(ConnectionPool& pool);
 
     std::vector<ProblemSummary> listProblems(const ProblemFilter& filter) const;
+    long long countProblems(bool include_hidden) const;
     std::optional<Problem> getProblem(long long id, bool include_hidden) const;
     long long createProblem(const Problem& problem, const std::vector<std::string>& tag_names) const;
     bool updateProblem(long long id, const Problem& problem, const std::vector<std::string>& tag_names) const;
