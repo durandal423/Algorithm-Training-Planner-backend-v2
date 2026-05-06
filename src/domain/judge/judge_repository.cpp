@@ -95,7 +95,7 @@ std::vector<JudgeTestCase> JudgeRepository::listTestCases(long long problem_id, 
     auto lease = pool_.acquire();
     pqxx::work tx{lease.connection()};
     std::vector<JudgeTestCase> cases;
-    const auto rows = tx.exec(
+    const auto result= tx.exec(
         R"SQL(
             SELECT id, problem_id, name, input_data, expected_output, visibility,
                    points, order_index, time_limit_ms, memory_limit_mb
@@ -106,7 +106,7 @@ std::vector<JudgeTestCase> JudgeRepository::listTestCases(long long problem_id, 
         )SQL",
         pqxx::params{problem_id, include_hidden}
     );
-    for (const auto& row : rows) {
+    for (const pqxx::row_ref row : result) {
         cases.push_back(test_case_from_row(row));
     }
     tx.commit();
@@ -254,7 +254,7 @@ std::vector<Submission> JudgeRepository::listSubmissions(const SubmissionFilter&
     std::vector<Submission> submissions;
     const int limit = std::clamp(filter.limit, 1, 200);
     const int offset = std::max(0, filter.offset);
-    const auto rows = tx.exec(
+    const auto result= tx.exec(
         std::string{kSubmissionSummarySelect} + R"SQL(
             WHERE ($1::bigint IS NULL OR problem_id = $1)
               AND ($2::bigint IS NULL OR user_id = $2)
@@ -272,7 +272,7 @@ std::vector<Submission> JudgeRepository::listSubmissions(const SubmissionFilter&
             offset
         }
     );
-    for (const auto& row : rows) {
+    for (const pqxx::row_ref row : result) {
         submissions.push_back(submission_summary_from_row(row));
     }
     tx.commit();
@@ -351,7 +351,7 @@ int JudgeRepository::recoverStaleJudgingSubmissions(
 ) const {
     auto lease = pool_.acquire();
     pqxx::work tx{lease.connection()};
-    const auto rows = tx.exec(
+    const auto result= tx.exec(
         R"SQL(
             UPDATE submissions
             SET status = CASE WHEN attempt_count >= $2 THEN 'failed' ELSE 'queued' END,
@@ -376,13 +376,13 @@ int JudgeRepository::recoverStaleJudgingSubmissions(
         )SQL",
         pqxx::params{stale_after_seconds, max_attempts}
     );
-    for (const auto& row : rows) {
+    for (const pqxx::row_ref row : result) {
         if (row["status"].as<std::string>() == "failed") {
             updateLatestPlanItemFromSubmission(tx, row["id"].as<long long>(), row["verdict"].as<std::string>());
         }
     }
     tx.commit();
-    return static_cast<int>(rows.size());
+    return static_cast<int>(result.size());
 }
 
 bool JudgeRepository::resetSubmissionForRejudge(long long id) const {
@@ -558,7 +558,7 @@ std::vector<SubmissionResult> JudgeRepository::loadResults(
     long long submission_id
 ) const {
     std::vector<SubmissionResult> results;
-    const auto rows = tx.exec(
+    const auto result= tx.exec(
         R"SQL(
             SELECT id, submission_id, test_case_id, order_index, status, verdict,
                    time_ms, memory_kb, exit_code, stdout_sample, stderr_sample, message
@@ -568,7 +568,7 @@ std::vector<SubmissionResult> JudgeRepository::loadResults(
         )SQL",
         pqxx::params{submission_id}
     );
-    for (const auto& row : rows) {
+    for (const pqxx::row_ref row : result) {
         results.push_back(result_from_row(row));
     }
     return results;

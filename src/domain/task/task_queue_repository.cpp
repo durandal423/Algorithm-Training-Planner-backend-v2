@@ -111,7 +111,7 @@ void TaskQueueRepository::markFailed(
 int TaskQueueRepository::recoverStaleRunningTasks(int stale_after_seconds) const {
     auto lease = pool_.acquire();
     pqxx::work tx{lease.connection()};
-    const auto rows = tx.exec(
+    const auto result= tx.exec(
         R"SQL(
             UPDATE background_tasks
             SET status = CASE
@@ -140,7 +140,7 @@ int TaskQueueRepository::recoverStaleRunningTasks(int stale_after_seconds) const
         pqxx::params{stale_after_seconds}
     );
     tx.commit();
-    return static_cast<int>(rows.size());
+    return static_cast<int>(result.size());
 }
 
 } // namespace task

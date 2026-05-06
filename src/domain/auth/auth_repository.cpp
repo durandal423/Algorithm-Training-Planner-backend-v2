@@ -144,7 +144,7 @@ void AuthRepository::touchSession(const std::string& token_hash) const {
 bool AuthRepository::revokeSession(const std::string& token_hash) const {
     auto lease = pool_.acquire();
     pqxx::work tx{lease.connection()};
-    const auto rows = tx.exec(
+    const auto result= tx.exec(
         R"SQL(
             UPDATE user_sessions
             SET revoked_at = now()
@@ -154,7 +154,7 @@ bool AuthRepository::revokeSession(const std::string& token_hash) const {
         pqxx::params{token_hash}
     );
     tx.commit();
-    return rows.affected_rows() > 0;
+    return result.affected_rows() > 0;
 }
 
 void AuthRepository::markLogin(long long user_id) const {

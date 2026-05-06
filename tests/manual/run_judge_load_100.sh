@@ -81,7 +81,7 @@ VALUES
 ', '3
 ', 'public'),
   ('P12135', 'P12135 Judge Load Fixture', 'local', 'https://www.luogu.com.cn/problem/P12135',
-   1700, 40, 'Load-test fixture for P12135.', 'Two rows of equal length.', 'Minimum cost.',
+   1700, 40, 'Load-test fixture for P12135.', 'Two result of equal length.', 'Minimum cost.',
    '.##.....#
 .#.#.#...
 ', '5

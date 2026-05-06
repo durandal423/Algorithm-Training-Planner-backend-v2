@@ -159,7 +159,7 @@ JOIN tags t ON t.name = mapping.tag_name
 ON CONFLICT DO NOTHING;
 
 -- Synthetic practice bank: keep hand-written examples above, then fill
--- T0000000033..T0001000000 with deterministic generated rows for recommendation,
+-- T0000000033..T0001000000 with deterministic generated result for recommendation,
 -- pagination, and training-plan experiments.
 WITH generated_problem_seed AS (
     SELECT
@@ -276,7 +276,7 @@ WITH tag_vocab AS (
         '二分'
     ]::text[] AS tags
 ),
-generated_problem_rows AS (
+generated_problem_result AS (
     SELECT
         code,
         substring(code FROM 2)::integer AS n
@@ -285,17 +285,17 @@ generated_problem_rows AS (
 ),
 generated_problem_tag_seed AS (
     SELECT
-        generated_problem_rows.code AS problem_code,
+        generated_problem_result.code AS problem_code,
         selected.tag_name
-    FROM generated_problem_rows
+    FROM generated_problem_result
     CROSS JOIN tag_vocab
     CROSS JOIN LATERAL (
         VALUES
-            (tag_vocab.tags[((generated_problem_rows.n - 1) % array_length(tag_vocab.tags, 1)) + 1]),
-            (tag_vocab.tags[((generated_problem_rows.n + 3) % array_length(tag_vocab.tags, 1)) + 1]),
-            (tag_vocab.tags[((generated_problem_rows.n + 7) % array_length(tag_vocab.tags, 1)) + 1])
+            (tag_vocab.tags[((generated_problem_result.n - 1) % array_length(tag_vocab.tags, 1)) + 1]),
+            (tag_vocab.tags[((generated_problem_result.n + 3) % array_length(tag_vocab.tags, 1)) + 1]),
+            (tag_vocab.tags[((generated_problem_result.n + 7) % array_length(tag_vocab.tags, 1)) + 1])
     ) AS selected(tag_name)
-    WHERE generated_problem_rows.n BETWEEN 33 AND 1000000
+    WHERE generated_problem_result.n BETWEEN 33 AND 1000000
 )
 INSERT INTO problem_tags(problem_id, tag_id)
 SELECT p.id, t.id

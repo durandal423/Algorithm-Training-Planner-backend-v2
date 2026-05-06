@@ -42,7 +42,7 @@
 ## Known Environment Issue
 
 - Running the full `RUN_DB_TESTS=1 ctest` against the shared development database can fail
-  because old `submissions` rows outside the test fixtures are still in `queued`/`judging`
+  because old `submissions` result outside the test fixtures are still in `queued`/`judging`
   state. The judge queue tests consume the global queue and assume an isolated database.
   This is pre-existing test isolation debt, not caused by the background task refactor.
 

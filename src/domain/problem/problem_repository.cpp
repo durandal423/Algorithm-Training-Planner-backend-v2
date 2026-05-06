@@ -34,7 +34,7 @@ std::vector<ProblemSummary> ProblemRepository::listProblems(const ProblemFilter&
 
     const int limit = std::clamp(filter.limit, 1, 200);
     const int offset = std::max(0, filter.offset);
-    const auto rows = tx.exec(
+    const auto result= tx.exec(
         R"SQL(
             WITH tag_filter AS (
                 SELECT trim(value) AS value
@@ -68,8 +68,8 @@ std::vector<ProblemSummary> ProblemRepository::listProblems(const ProblemFilter&
             offset
         }
     );
-    problems.reserve(rows.size());
-    for (const auto& row : rows) {
+    problems.reserve(result.size());
+    for (const pqxx::row_ref row : result) {
         problems.push_back(problem_summary_from_row(row));
     }
     loadTagsForProblems(tx, problems);
@@ -214,12 +214,12 @@ std::vector<Tag> ProblemRepository::listTags() const {
     auto lease = pool_.acquire();
     pqxx::work tx{lease.connection()};
     std::vector<Tag> tags;
-    const auto rows = tx.exec(R"SQL(
+    const auto result= tx.exec(R"SQL(
         SELECT id, name, description
         FROM tags
         ORDER BY name
     )SQL");
-    for (const auto& row : rows) {
+    for (const pqxx::row_ref row : result) {
         tags.push_back(tag_from_row(row));
     }
     tx.commit();
@@ -269,7 +269,7 @@ void ProblemRepository::replaceProblemTags(
 
 std::vector<Tag> ProblemRepository::loadTags(pqxx::transaction_base& tx, long long problem_id) const {
     std::vector<Tag> tags;
-    const auto rows = tx.exec(
+    const auto result= tx.exec(
         R"SQL(
             SELECT t.id, t.name, t.description
             FROM tags t
@@ -279,7 +279,7 @@ std::vector<Tag> ProblemRepository::loadTags(pqxx::transaction_base& tx, long lo
         )SQL",
         pqxx::params{problem_id}
     );
-    for (const auto& row : rows) {
+    for (const pqxx::row_ref row : result) {
         tags.push_back(tag_from_row(row));
     }
     return tags;
@@ -309,7 +309,7 @@ void ProblemRepository::loadTagsForProblems(
         placeholder.next();
     }
 
-    const auto rows = tx.exec(
+    const auto result= tx.exec(
         R"SQL(
             SELECT pt.problem_id, t.id, t.name, t.description
             FROM tags t
@@ -321,7 +321,7 @@ void ProblemRepository::loadTagsForProblems(
         )SQL",
         params
     );
-    for (const auto& row : rows) {
+    for (const pqxx::row_ref row : result) {
         const auto problem_id = row["problem_id"].template as<long long>();
         const auto found = problems_by_id.find(problem_id);
         if (found == problems_by_id.end()) {

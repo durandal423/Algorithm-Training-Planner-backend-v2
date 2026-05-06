@@ -89,14 +89,14 @@ std::vector<TrainingGoal> TrainingRepository::listGoals(long long user_id) const
     auto lease = pool_.acquire();
     pqxx::work tx{lease.connection()};
     std::vector<TrainingGoal> goals;
-    const auto rows = tx.exec(
+    const auto result= tx.exec(
         std::string{kGoalSelect} + R"SQL(
             WHERE user_id = $1
             ORDER BY created_at DESC, id DESC
         )SQL",
         pqxx::params{user_id}
     );
-    for (const auto& row : rows) {
+    for (const pqxx::row_ref row : result) {
         auto goal = goal_from_row(row);
         goal.tag_names = loadGoalTags(tx, goal.id);
         goals.push_back(std::move(goal));
@@ -232,14 +232,14 @@ std::vector<TrainingPlan> TrainingRepository::listPlans(long long user_id) const
     auto lease = pool_.acquire();
     pqxx::work tx{lease.connection()};
     std::vector<TrainingPlan> plans;
-    const auto rows = tx.exec(
+    const auto result= tx.exec(
         std::string{kPlanSelect} + R"SQL(
             WHERE user_id = $1
             ORDER BY created_at DESC, id DESC
         )SQL",
         pqxx::params{user_id}
     );
-    for (const auto& row : rows) {
+    for (const pqxx::row_ref row : result) {
         plans.push_back(plan_from_row(row));
     }
     tx.commit();
@@ -250,7 +250,7 @@ std::vector<TrainingPlanItem> TrainingRepository::listPlanItems(long long plan_i
     auto lease = pool_.acquire();
     pqxx::work tx{lease.connection()};
     std::vector<TrainingPlanItem> items;
-    const auto rows = tx.exec(
+    const auto result= tx.exec(
         R"SQL(
             SELECT tpi.id,
                    tpi.plan_id,
@@ -283,7 +283,7 @@ std::vector<TrainingPlanItem> TrainingRepository::listPlanItems(long long plan_i
         )SQL",
         pqxx::params{plan_id}
     );
-    for (const auto& row : rows) {
+    for (const pqxx::row_ref row : result) {
         items.push_back(item_from_row(row));
     }
     tx.commit();
@@ -304,7 +304,7 @@ std::vector<TrainingProblemCandidate> TrainingRepository::listProblemCandidates(
         }
         goal_tags_text += tag;
     }
-    const auto rows = tx.exec(
+    const auto result= tx.exec(
         R"SQL(
             WITH goal_tags AS (
                 SELECT trim(name) AS name
@@ -347,7 +347,7 @@ std::vector<TrainingProblemCandidate> TrainingRepository::listProblemCandidates(
             goal_tags_text
         }
     );
-    for (const auto& row : rows) {
+    for (const pqxx::row_ref row : result) {
         candidates.push_back(candidate_from_row(row));
     }
     tx.commit();
@@ -460,7 +460,7 @@ std::vector<std::string> TrainingRepository::loadGoalTags(
     long long goal_id
 ) const {
     std::vector<std::string> tags;
-    const auto rows = tx.exec(
+    const auto result= tx.exec(
         R"SQL(
             SELECT t.name
             FROM tags t
@@ -470,7 +470,7 @@ std::vector<std::string> TrainingRepository::loadGoalTags(
         )SQL",
         pqxx::params{goal_id}
     );
-    for (const auto& row : rows) {
+    for (const pqxx::row_ref row : result) {
         tags.push_back(row["name"].template as<std::string>());
     }
     return tags;

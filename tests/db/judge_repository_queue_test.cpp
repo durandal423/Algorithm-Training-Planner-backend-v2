@@ -155,14 +155,14 @@ TEST_CASE("seeded sample problems have enabled judge configs and test cases") {
 
     pqxx::connection conn{Database::appConninfo()};
     pqxx::work tx{conn};
-    const auto rows = tx.exec(R"SQL(
+    const auto result= tx.exec(R"SQL(
         SELECT id, code
         FROM problems
         WHERE code IN ('P12134', 'P12135')
         ORDER BY code
     )SQL");
-    REQUIRE(rows.size() == 2);
-    for (const auto& row : rows) {
+    REQUIRE(result.size() == 2);
+    for (const pqxx::row_ref row : result) {
         const auto problem_id = row["id"].as<long long>();
         const auto config = repository.getConfig(problem_id);
         REQUIRE(config.has_value());

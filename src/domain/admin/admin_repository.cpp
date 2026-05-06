@@ -34,7 +34,7 @@ std::vector<AuditLog> AdminRepository::listAuditLogs(int limit) const {
     auto lease = pool_.acquire();
     pqxx::work tx{lease.connection()};
     std::vector<AuditLog> logs;
-    const auto rows = tx.exec(
+    const auto result= tx.exec(
         R"SQL(
             SELECT id, actor_user_id, action, target_type, target_id,
                    metadata::text AS metadata, created_at
@@ -44,7 +44,7 @@ std::vector<AuditLog> AdminRepository::listAuditLogs(int limit) const {
         )SQL",
         pqxx::params{std::clamp(limit, 1, 200)}
     );
-    for (const auto& row : rows) {
+    for (const pqxx::row_ref row : result) {
         logs.push_back(audit_log_from_row(row));
     }
     tx.commit();
