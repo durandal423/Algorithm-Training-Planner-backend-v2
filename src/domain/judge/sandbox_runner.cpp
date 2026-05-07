@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <optional>
 #include <string>
 #include <utility>
@@ -103,18 +104,33 @@ std::optional<bool> container_oom_killed(const std::string& container_name) {
     return std::nullopt;
 }
 
+bool memory_limit_error_text(const std::string& text) {
+    const auto lowered = lower_copy(text);
+    return lowered.find("std::bad_alloc") != std::string::npos ||
+        lowered.find("cannot allocate memory") != std::string::npos ||
+        lowered.find("memory allocation failed") != std::string::npos ||
+        lowered.find("out of memory") != std::string::npos ||
+        lowered.find("killed") != std::string::npos;
+}
+
 bool memory_limit_error_text(const sandbox_process::CommandCapture& capture) {
-    const auto text = lower_copy(capture.stderr_text + "\n" + capture.stdout_text);
-    return text.find("std::bad_alloc") != std::string::npos ||
-        text.find("cannot allocate memory") != std::string::npos ||
-        text.find("memory allocation failed") != std::string::npos ||
-        text.find("out of memory") != std::string::npos ||
-        text.find("killed") != std::string::npos;
+    return memory_limit_error_text(capture.stderr_text + "\n" + capture.stdout_text);
+}
+
+bool memory_limit_over_reported_usage(int memory_kb, int memory_limit_mb) {
+    if (memory_kb <= 0 || memory_limit_mb <= 0) {
+        return false;
+    }
+    return static_cast<long long>(memory_kb) >
+        static_cast<long long>(memory_limit_mb) * 1024;
 }
 
 bool memory_limit_exceeded(
     const sandbox_process::CommandCapture& capture,
-    const std::string& container_name
+    const std::string& container_name,
+    const std::string& user_stderr,
+    int memory_kb,
+    int memory_limit_mb
 ) {
     if (capture.process.timed_out || capture.process.exit_code == 124) {
         return false;
@@ -128,7 +144,50 @@ bool memory_limit_exceeded(
         return true;
     }
 
-    return capture.process.exit_code != 0 && memory_limit_error_text(capture);
+    if (memory_limit_over_reported_usage(memory_kb, memory_limit_mb)) {
+        return true;
+    }
+
+    return capture.process.exit_code != 0 &&
+        (memory_limit_error_text(capture) || memory_limit_error_text(user_stderr));
+}
+
+std::string measured_run_command(
+    const std::string& command,
+    const std::string& memory_file
+) {
+    return std::string{"if command -v /usr/bin/time >/dev/null 2>&1; then "} +
+        "/usr/bin/time -f " + sandbox_process::quoteShell("OJ_MAX_RSS_KB=%M") +
+        " -o " + sandbox_process::quoteShell(memory_file) +
+        " sh -lc " + sandbox_process::quoteShell(command) +
+        "; else sh -lc " + sandbox_process::quoteShell(command) + "; fi";
+}
+
+int parse_memory_kb(const std::filesystem::path& memory_path) {
+    const auto text = sandbox_process::readLimited(memory_path, 4096);
+    const std::string marker = "OJ_MAX_RSS_KB=";
+    const auto marker_pos = text.find(marker);
+    if (marker_pos == std::string::npos) {
+        return 0;
+    }
+
+    auto pos = marker_pos + marker.size();
+    while (pos < text.size() && std::isspace(static_cast<unsigned char>(text[pos]))) {
+        ++pos;
+    }
+
+    long long value = 0;
+    bool has_digit = false;
+    while (pos < text.size() && std::isdigit(static_cast<unsigned char>(text[pos]))) {
+        has_digit = true;
+        value = value * 10 + (text[pos] - '0');
+        if (value > std::numeric_limits<int>::max()) {
+            return std::numeric_limits<int>::max();
+        }
+        ++pos;
+    }
+
+    return has_digit ? static_cast<int>(value) : 0;
 }
 
 std::string default_compile_template() {
@@ -200,10 +259,12 @@ RunResult SandboxRunner::run(
     const auto input_path = work_dir / ("input-" + std::to_string(run_index) + ".txt");
     const auto stdout_path = work_dir / ("stdout-" + std::to_string(run_index) + ".txt");
     const auto stderr_path = work_dir / ("stderr-" + std::to_string(run_index) + ".txt");
+    const auto memory_path = work_dir / ("memory-" + std::to_string(run_index) + ".txt");
     {
         std::ofstream input{input_path, std::ios::binary};
         input << test_case.input_data;
     }
+    std::filesystem::remove(memory_path);
 
     const auto container_dir = docker_sandbox_pool::containerWorkDirFor(work_dir);
     const auto container_name = containerName();
@@ -211,6 +272,7 @@ RunResult SandboxRunner::run(
     const auto docker_input = container_dir + "/" + input_path.filename().string();
     const auto docker_stdout = container_dir + "/" + stdout_path.filename().string();
     const auto docker_stderr = container_dir + "/" + stderr_path.filename().string();
+    const auto docker_memory = container_dir + "/" + memory_path.filename().string();
     const auto time_limit_ms = test_case.time_limit_ms.value_or(config.time_limit_ms);
     const auto memory_limit_mb = test_case.memory_limit_mb.value_or(config.memory_limit_mb);
     const auto timeout_seconds = std::max(1, (time_limit_ms + 999) / 1000);
@@ -223,6 +285,7 @@ RunResult SandboxRunner::run(
         docker_stdout,
         docker_stderr
     );
+    inner = measured_run_command(inner, docker_memory);
     inner = "ulimit -v " + std::to_string(static_cast<long long>(memory_limit_mb) * 1024) +
         " 2>/dev/null || true; timeout " + std::to_string(timeout_seconds) +
         "s sh -lc " + sandbox_process::quoteShell(inner);
@@ -235,17 +298,26 @@ RunResult SandboxRunner::run(
         stderr_path,
         static_cast<std::uintmax_t>(config.output_limit_kb) * 1024
     );
+    const int memory_kb = parse_memory_kb(memory_path);
+    const auto stdout_sample = sandbox_process::readLimited(stdout_path, 64 * 1024);
+    const auto stderr_sample = sandbox_process::readLimited(stderr_path, 64 * 1024);
 
     return RunResult{
         .timed_out = capture.process.timed_out || capture.process.exit_code == 124,
         .output_limit_exceeded = output_limit_exceeded,
-        .memory_limit_exceeded = memory_limit_exceeded(capture, container_name),
+        .memory_limit_exceeded = memory_limit_exceeded(
+            capture,
+            container_name,
+            stderr_sample,
+            memory_kb,
+            memory_limit_mb
+        ),
         .system_error = system_error,
         .exit_code = capture.process.exit_code,
         .time_ms = capture.process.time_ms,
-        .memory_kb = 0,
-        .stdout_sample = sandbox_process::readLimited(stdout_path, 64 * 1024),
-        .stderr_sample = sandbox_process::readLimited(stderr_path, 64 * 1024),
+        .memory_kb = memory_kb,
+        .stdout_sample = stdout_sample,
+        .stderr_sample = stderr_sample,
         .message = capture.process.message.empty() ? capture.stderr_text : capture.process.message
     };
 }
