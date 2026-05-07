@@ -172,12 +172,15 @@ bool JudgeService::processNextSubmission() {
 
             std::string verdict = "AC";
             std::string message = "accepted";
-            if (run.system_error) {
-                verdict = "JE";
-                message = run.message.empty() ? "judge runner failed during execution" : run.message;
-            } else if (run.timed_out) {
+            if (run.timed_out) {
                 verdict = "TLE";
                 message = "time limit exceeded";
+            } else if (run.memory_limit_exceeded) {
+                verdict = "MLE";
+                message = "memory limit exceeded";
+            } else if (run.system_error) {
+                verdict = "JE";
+                message = run.message.empty() ? "judge runner failed during execution" : run.message;
             } else if (run.output_limit_exceeded) {
                 verdict = "OLE";
                 message = "output limit exceeded";

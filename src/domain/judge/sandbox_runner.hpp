@@ -21,6 +21,7 @@ struct CompileResult {
 struct RunResult {
     bool timed_out{};
     bool output_limit_exceeded{};
+    bool memory_limit_exceeded{};
     bool system_error{};
     int exit_code{};
     int time_ms{};

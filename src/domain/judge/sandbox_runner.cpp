@@ -4,9 +4,11 @@
 #include "domain/judge/sandbox_process.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -60,6 +62,73 @@ bool docker_runner_error(const sandbox_process::CommandCapture& capture) {
         text.find("Error response from daemon") != std::string::npos ||
         text.find("No such container") != std::string::npos ||
         text.find("is not running") != std::string::npos;
+}
+
+std::string trim_copy(std::string text) {
+    while (!text.empty() && (text.back() == '\n' || text.back() == '\r' ||
+                             text.back() == ' ' || text.back() == '\t')) {
+        text.pop_back();
+    }
+    std::size_t first = 0;
+    while (first < text.size() && (text[first] == '\n' || text[first] == '\r' ||
+                                   text[first] == ' ' || text[first] == '\t')) {
+        ++first;
+    }
+    return first == 0 ? text : text.substr(first);
+}
+
+std::string lower_copy(std::string text) {
+    std::transform(text.begin(), text.end(), text.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::tolower(ch));
+    });
+    return text;
+}
+
+std::optional<bool> container_oom_killed(const std::string& container_name) {
+    const auto capture = sandbox_process::runCommandCapture(
+        "docker inspect --format " + sandbox_process::quoteShell("{{.State.OOMKilled}}") +
+            " " + sandbox_process::quoteShell(container_name),
+        5000
+    );
+    if (!sandbox_process::processSucceeded(capture.process)) {
+        return std::nullopt;
+    }
+    const auto text = trim_copy(capture.stdout_text);
+    if (text == "true") {
+        return true;
+    }
+    if (text == "false") {
+        return false;
+    }
+    return std::nullopt;
+}
+
+bool memory_limit_error_text(const sandbox_process::CommandCapture& capture) {
+    const auto text = lower_copy(capture.stderr_text + "\n" + capture.stdout_text);
+    return text.find("std::bad_alloc") != std::string::npos ||
+        text.find("cannot allocate memory") != std::string::npos ||
+        text.find("memory allocation failed") != std::string::npos ||
+        text.find("out of memory") != std::string::npos ||
+        text.find("killed") != std::string::npos;
+}
+
+bool memory_limit_exceeded(
+    const sandbox_process::CommandCapture& capture,
+    const std::string& container_name
+) {
+    if (capture.process.timed_out || capture.process.exit_code == 124) {
+        return false;
+    }
+
+    if (const auto oom_killed = container_oom_killed(container_name); oom_killed.value_or(false)) {
+        return true;
+    }
+
+    if (capture.process.exit_code == 137) {
+        return true;
+    }
+
+    return capture.process.exit_code != 0 && memory_limit_error_text(capture);
 }
 
 std::string default_compile_template() {
@@ -170,6 +239,7 @@ RunResult SandboxRunner::run(
     return RunResult{
         .timed_out = capture.process.timed_out || capture.process.exit_code == 124,
         .output_limit_exceeded = output_limit_exceeded,
+        .memory_limit_exceeded = memory_limit_exceeded(capture, container_name),
         .system_error = system_error,
         .exit_code = capture.process.exit_code,
         .time_ms = capture.process.time_ms,
