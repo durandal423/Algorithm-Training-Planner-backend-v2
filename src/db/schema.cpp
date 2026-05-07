@@ -47,7 +47,8 @@ constexpr std::array kMigrations{
     MigrationScript{3, "migrations/003_judge_training_admin_schema.sql", "create judge training and admin schema"},
     MigrationScript{4, "migrations/004_background_tasks.sql", "create background task queue schema"},
     MigrationScript{5, "seeds/005_judge_sample_fixtures.sql", "seed sample judge configs and test cases"},
-    MigrationScript{6,"seeds/006_default_admin_user.sql","seed default admin user"}
+    MigrationScript{6,"seeds/006_default_admin_user.sql","seed default admin user"},
+    MigrationScript{9, "migrations/009_training_plan_generation_performance.sql", "optimize training plan generation queries"}
 };
 
 std::filesystem::path sql_path(std::string_view filename) {

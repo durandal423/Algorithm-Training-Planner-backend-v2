@@ -76,6 +76,29 @@ TEST_CASE("selectStableDifficultyWindow uses a stable two-pointer difficulty win
     REQUIRE(window.covered_tags.size() == 2);
 }
 
+TEST_CASE("selectStableDifficultyWindow fallback stays bounded when tags are spread out") {
+    std::vector<training::TrainingProblemCandidate> candidates;
+    for (int i = 0; i < 10; ++i) {
+        candidates.push_back(candidate(i + 1, 1000 + i, 10, {"动态规划"}));
+    }
+    for (int i = 0; i < 10; ++i) {
+        candidates.push_back(candidate(100 + i, 2000 + i, 10, {"双指针"}));
+    }
+    for (int i = 0; i < 10; ++i) {
+        candidates.push_back(candidate(200 + i, 3000 + i, 10, {"图论"}));
+    }
+
+    auto selected_goal = goal();
+    selected_goal.target_count = 1;
+    selected_goal.tag_names = {"动态规划", "双指针", "图论"};
+
+    const auto window = training::selectStableDifficultyWindow(candidates, selected_goal);
+
+    REQUIRE(window.candidates.size() == 3);
+    REQUIRE(window.covered_tags.size() == 2);
+    REQUIRE(window.uncovered_tags.size() == 1);
+}
+
 TEST_CASE("optimizeTrainingPlanByDP respects time and count budgets") {
     const std::vector<training::TrainingProblemCandidate> candidates = {
         candidate(1, 1000, 20, {"动态规划"}),

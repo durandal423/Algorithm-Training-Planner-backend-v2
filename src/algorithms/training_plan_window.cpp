@@ -209,6 +209,34 @@ bool better_window(
     return candidate.candidates.size() < best.candidates.size();
 }
 
+bool better_partial_window(
+    const WindowStats& stats,
+    int left,
+    int right,
+    const std::vector<TrainingProblemCandidate>& sorted,
+    const StableDifficultyWindow& best,
+    const TrainingGoal& goal
+) {
+    if (best.left_index < 0) {
+        return true;
+    }
+
+    if (stats.covered_available_count != static_cast<int>(best.covered_tags.size())) {
+        return stats.covered_available_count > static_cast<int>(best.covered_tags.size());
+    }
+
+    const int span = sorted[right].difficulty - sorted[left].difficulty;
+    if (span != best.difficulty_span) {
+        return span < best.difficulty_span;
+    }
+
+    if (goal.prefer_wrong_problems && stats.wrong_count != best.wrong_problem_count) {
+        return stats.wrong_count > best.wrong_problem_count;
+    }
+
+    return sorted[left].id < sorted[best.left_index].id;
+}
+
 } // namespace
 
 StableDifficultyWindow selectStableDifficultyWindow(
@@ -231,15 +259,16 @@ StableDifficultyWindow selectStableDifficultyWindow(
     for (int right = 0; right < static_cast<int>(sorted.size()); ++right) {
         add_candidate(stats, sorted[right], tags);
 
-        while (left <= right &&
-               is_valid_window(stats, right - left + 1, min_size, tags)) {
+        while (right - left + 1 > min_size) {
+            remove_candidate(stats, sorted[left], tags);
+            ++left;
+        }
+
+        if (is_valid_window(stats, right - left + 1, min_size, tags)) {
             auto candidate = make_window(sorted, left, right, stats, tags);
             if (better_window(candidate, best, goal)) {
                 best = std::move(candidate);
             }
-
-            remove_candidate(stats, sorted[left], tags);
-            ++left;
         }
     }
 
@@ -247,19 +276,30 @@ StableDifficultyWindow selectStableDifficultyWindow(
         return best;
     }
 
+    StableDifficultyWindow fallback;
     WindowStats fallback_stats{
         .tag_counts = std::vector<int>(tags.requested.size(), 0)
     };
-    for (const auto& candidate : sorted) {
-        add_candidate(fallback_stats, candidate, tags);
+    left = 0;
+    for (int right = 0; right < static_cast<int>(sorted.size()); ++right) {
+        add_candidate(fallback_stats, sorted[right], tags);
+
+        while (right - left + 1 > min_size) {
+            remove_candidate(fallback_stats, sorted[left], tags);
+            ++left;
+        }
+
+        if (right - left + 1 == min_size &&
+            better_partial_window(fallback_stats, left, right, sorted, fallback, goal)) {
+            fallback = make_window(sorted, left, right, fallback_stats, tags);
+        }
     }
-    return make_window(
-        sorted,
-        0,
-        static_cast<int>(sorted.size()) - 1,
-        fallback_stats,
-        tags
-    );
+
+    if (fallback.left_index >= 0) {
+        return fallback;
+    }
+
+    return {};
 }
 
 } // namespace training

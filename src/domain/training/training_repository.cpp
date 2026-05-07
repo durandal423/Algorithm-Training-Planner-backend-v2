@@ -4,8 +4,14 @@
 #include <pqxx/pqxx>
 #include <spdlog/spdlog.h>
 
+#include <algorithm>
+
 namespace training {
 namespace {
+
+constexpr int kMinTrainingCandidatePoolLimit = 300;
+constexpr int kMaxTrainingCandidatePoolLimit = 2000;
+constexpr int kCandidatePoolLimitPerTarget = 100;
 
 constexpr auto kGoalSelect = R"SQL(
     SELECT id, user_id, name, target_count, time_budget_minutes,
@@ -20,6 +26,13 @@ constexpr auto kPlanSelect = R"SQL(
            selected_count, total_estimated_minutes, algorithm_summary, created_at
     FROM training_plans
 )SQL";
+
+int candidate_pool_limit(const TrainingGoal& goal) {
+    return std::min(
+        kMaxTrainingCandidatePoolLimit,
+        std::max(kMinTrainingCandidatePoolLimit, goal.target_count * kCandidatePoolLimitPerTarget)
+    );
+}
 
 } // namespace
 
@@ -311,26 +324,46 @@ std::vector<TrainingProblemCandidate> TrainingRepository::listProblemCandidates(
                 FROM unnest(string_to_array($6, E'\n')) AS name
                 WHERE trim(name) <> ''
             ),
-            tagged AS (
+            candidate_pool AS (
                 SELECT p.id,
                        p.code,
                        p.title,
                        p.difficulty,
-                       p.estimated_minutes,
-                       COALESCE(string_agg(DISTINCT t.name, ',' ORDER BY t.name), '') AS tag_names,
-                       COUNT(DISTINCT gt.name)::integer AS matched_tag_count,
-                       COUNT(DISTINCT s.id) FILTER (
-                           WHERE s.user_id = $1 AND s.verdict IS NOT NULL AND s.verdict <> 'AC'
-                       )::integer AS wrong_attempt_count
+                       p.estimated_minutes
                 FROM problems p
-                LEFT JOIN problem_tags pt ON pt.problem_id = p.id
-                LEFT JOIN tags t ON t.id = pt.tag_id
-                LEFT JOIN goal_tags gt ON lower(gt.name) = lower(t.name)
-                LEFT JOIN submissions s ON s.problem_id = p.id
                 WHERE ($2 OR p.visibility = 'public')
                   AND ($3::integer IS NULL OR p.difficulty >= $3)
                   AND ($4::integer IS NULL OR p.difficulty <= $4)
-                GROUP BY p.id, p.code, p.title, p.difficulty, p.estimated_minutes
+                  AND (
+                      $5 = 0 OR EXISTS (
+                          SELECT 1
+                          FROM problem_tags pt_match
+                          JOIN tags t_match ON t_match.id = pt_match.tag_id
+                          JOIN goal_tags gt_match ON lower(gt_match.name) = lower(t_match.name)
+                          WHERE pt_match.problem_id = p.id
+                      )
+                  )
+                ORDER BY p.difficulty ASC, p.estimated_minutes ASC, p.id ASC
+                LIMIT $7
+            ),
+            tagged AS (
+                SELECT cp.id,
+                       cp.code,
+                       cp.title,
+                       cp.difficulty,
+                       cp.estimated_minutes,
+                       COALESCE(string_agg(DISTINCT t.name, ',' ORDER BY t.name), '') AS tag_names,
+                       COUNT(DISTINCT gt.name)::integer AS matched_tag_count,
+                       COUNT(DISTINCT s.id)::integer AS wrong_attempt_count
+                FROM candidate_pool cp
+                LEFT JOIN problem_tags pt ON pt.problem_id = cp.id
+                LEFT JOIN tags t ON t.id = pt.tag_id
+                LEFT JOIN goal_tags gt ON lower(gt.name) = lower(t.name)
+                LEFT JOIN submissions s ON s.problem_id = cp.id
+                    AND s.user_id = $1
+                    AND s.verdict IS NOT NULL
+                    AND s.verdict <> 'AC'
+                GROUP BY cp.id, cp.code, cp.title, cp.difficulty, cp.estimated_minutes
             )
             SELECT id, code, title, difficulty, estimated_minutes,
                    tag_names, matched_tag_count, wrong_attempt_count
@@ -344,7 +377,8 @@ std::vector<TrainingProblemCandidate> TrainingRepository::listProblemCandidates(
             goal.difficulty_min,
             goal.difficulty_max,
             static_cast<int>(goal.tag_names.size()),
-            goal_tags_text
+            goal_tags_text,
+            candidate_pool_limit(goal)
         }
     );
     for (const pqxx::row_ref row : result) {
