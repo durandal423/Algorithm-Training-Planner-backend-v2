@@ -88,10 +88,10 @@
 - `GET /api/submissions/<id>`
 - `GET /api/admin/submissions`
 - `POST /api/admin/submissions/<id>/rejudge`
-- `GET /api/admin/problems/<id>/judge-config`
-- `PUT /api/admin/problems/<id>/judge-config`
-- `GET /api/admin/problems/<id>/judge-test-cases`
-- `POST /api/admin/problems/<id>/judge-test-cases`
+- `GET /api/admin/problems/<code>/judge-config`
+- `PUT /api/admin/problems/<code>/judge-config`
+- `GET /api/admin/problems/<code>/judge-test-cases`
+- `POST /api/admin/problems/<code>/judge-test-cases`
 - `PUT /api/admin/judge-test-cases/<id>`
 - `DELETE /api/admin/judge-test-cases/<id>`
 - `GET /api/training/goals`

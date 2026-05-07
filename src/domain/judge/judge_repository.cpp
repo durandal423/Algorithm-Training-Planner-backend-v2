@@ -26,6 +26,24 @@ constexpr auto kSubmissionSummarySelect = R"SQL(
 JudgeRepository::JudgeRepository(ConnectionPool& pool)
     : pool_(pool) {}
 
+std::optional<long long> JudgeRepository::findProblemIdByCode(const std::string& problem_code) const {
+    auto lease = pool_.acquire();
+    pqxx::work tx{lease.connection()};
+    const auto row = tx.exec(
+        R"SQL(
+            SELECT id
+            FROM problems
+            WHERE code = $1
+        )SQL",
+        pqxx::params{problem_code}
+    ).opt_row();
+    tx.commit();
+    if (!row) {
+        return std::nullopt;
+    }
+    return row.value()["id"].as<long long>();
+}
+
 std::optional<JudgeConfig> JudgeRepository::getConfig(long long problem_id) const {
     auto lease = pool_.acquire();
     pqxx::work tx{lease.connection()};

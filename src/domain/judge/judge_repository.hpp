@@ -107,6 +107,7 @@ class JudgeRepository final {
 public:
     explicit JudgeRepository(ConnectionPool& pool);
 
+    std::optional<long long> findProblemIdByCode(const std::string& problem_code) const;
     std::optional<JudgeConfig> getConfig(long long problem_id) const;
     JudgeConfig upsertConfig(const JudgeConfig& config) const;
     std::vector<JudgeTestCase> listTestCases(long long problem_id, bool include_hidden) const;

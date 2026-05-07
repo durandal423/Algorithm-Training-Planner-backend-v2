@@ -209,15 +209,19 @@ RouteRegistration judgeRoutesRegistration([](App& app, runtime::ApplicationConte
         }
     });
 
-    CROW_ROUTE(app, "/api/admin/problems/<int>/judge-config")
+    CROW_ROUTE(app, "/api/admin/problems/<string>/judge-config")
     .methods(crow::HTTPMethod::Get, crow::HTTPMethod::Put)
-    ([&context](const crow::request& req, int problem_id) -> crow::response {
+    ([&context](const crow::request& req, const std::string& problem_code) -> crow::response {
         try {
             auto& connection_pool = context.apiPool();
             auth::requireAdmin(connection_pool, req);
             judge::JudgeRepository repository{connection_pool};
+            const auto problem_id = repository.findProblemIdByCode(problem_code);
+            if (!problem_id) {
+                return api::json_response(404, {{"error", "problem not found"}});
+            }
             if (req.method == crow::HTTPMethod::Get) {
-                const auto config = repository.getConfig(problem_id);
+                const auto config = repository.getConfig(*problem_id);
                 if (!config) {
                     return api::json_response(404, {{"error", "judge config not found"}});
                 }
@@ -225,7 +229,7 @@ RouteRegistration judgeRoutesRegistration([](App& app, runtime::ApplicationConte
             }
 
             const auto body = nlohmann::json::parse(req.body);
-            const auto config = repository.upsertConfig(config_from_json(problem_id, body));
+            const auto config = repository.upsertConfig(config_from_json(*problem_id, body));
             return api::json_response(200, {{"config", config}});
         } catch (const auth::Unauthorized& error) {
             return api::json_response(401, {{"error", error.what()}});
@@ -236,22 +240,26 @@ RouteRegistration judgeRoutesRegistration([](App& app, runtime::ApplicationConte
         }
     });
 
-    CROW_ROUTE(app, "/api/admin/problems/<int>/judge-test-cases")
+    CROW_ROUTE(app, "/api/admin/problems/<string>/judge-test-cases")
     .methods(crow::HTTPMethod::Get, crow::HTTPMethod::Post)
-    ([&context](const crow::request& req, int problem_id) -> crow::response {
+    ([&context](const crow::request& req, const std::string& problem_code) -> crow::response {
         try {
             auto& connection_pool = context.apiPool();
             auth::requireAdmin(connection_pool, req);
             judge::JudgeRepository repository{connection_pool};
+            const auto problem_id = repository.findProblemIdByCode(problem_code);
+            if (!problem_id) {
+                return api::json_response(404, {{"error", "problem not found"}});
+            }
             if (req.method == crow::HTTPMethod::Get) {
                 return api::json_response(
                     200,
-                    {{"items", repository.listTestCases(problem_id, true)}}
+                    {{"items", repository.listTestCases(*problem_id, true)}}
                 );
             }
 
             const auto body = nlohmann::json::parse(req.body);
-            const auto id = repository.createTestCase(test_case_from_json(problem_id, body));
+            const auto id = repository.createTestCase(test_case_from_json(*problem_id, body));
             return api::json_response(201, {{"id", id}});
         } catch (const auth::Unauthorized& error) {
             return api::json_response(401, {{"error", error.what()}});

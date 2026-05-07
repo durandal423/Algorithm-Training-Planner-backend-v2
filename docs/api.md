@@ -852,7 +852,7 @@ GET /api/problems?q=P12134&tag=滑动窗口&limit=20&offset=0
 
 ### 获取判题配置
 
-`GET /api/admin/problems/<id>/judge-config`
+`GET /api/admin/problems/<code>/judge-config`
 
 权限：管理员。
 
@@ -866,7 +866,7 @@ GET /api/problems?q=P12134&tag=滑动窗口&limit=20&offset=0
 
 ### 保存判题配置
 
-`PUT /api/admin/problems/<id>/judge-config`
+`PUT /api/admin/problems/<code>/judge-config`
 
 权限：管理员。
 
@@ -901,7 +901,7 @@ GET /api/problems?q=P12134&tag=滑动窗口&limit=20&offset=0
 
 ### 测试点列表
 
-`GET /api/admin/problems/<id>/judge-test-cases`
+`GET /api/admin/problems/<code>/judge-test-cases`
 
 权限：管理员。
 
@@ -915,7 +915,7 @@ GET /api/problems?q=P12134&tag=滑动窗口&limit=20&offset=0
 
 ### 创建测试点
 
-`POST /api/admin/problems/<id>/judge-test-cases`
+`POST /api/admin/problems/<code>/judge-test-cases`
 
 权限：管理员。
 
