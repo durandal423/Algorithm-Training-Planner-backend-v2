@@ -30,6 +30,7 @@ inline constexpr int TRAINING_GOAL_MAX_TIME_BUDGET_MINUTES = 480;
 inline constexpr int TRAINING_GOAL_MAX_TAGS = 20;
 
 inline constexpr char JUDGE_DOCKER_POOL_NAME_PREFIX[] = "atp-judge-sandbox";
+inline constexpr char JUDGE_DOCKER_IMAGE[] = "atp-judge-gcc13-time:latest";
 inline constexpr char JUDGE_DOCKER_WORK_ROOT[] = "@CMAKE_SOURCE_DIR@/.judge-work";
 inline constexpr int JUDGE_DOCKER_POOL_SIZE = 12;
 inline constexpr int JUDGE_CONNECTION_POOL_MAX_SIZE = 12;

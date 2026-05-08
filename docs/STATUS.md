@@ -36,7 +36,7 @@
   - 独立 `Algorithm-judge-worker` 进程内由 `JudgeDispatcher` 启动固定线程池。
   - Judge 线程使用 `FOR UPDATE SKIP LOCKED` 抢 `queued` submission，避免重复领取。
   - Docker 判题池使用 `atp-judge-sandbox-0..N` 命名。
-  - 默认 Docker 镜像为 `gcc:13`。
+  - 默认 Docker 镜像为项目自定义 `atp-judge-gcc13-time:latest`，基于 `gcc:13` 并安装 GNU `/usr/bin/time`。
   - 支持 `exact`、`trim_trailing`、`ignore_whitespace`、`float_epsilon` 输出比较。
 - Judge API：
   - 普通用户可提交代码、查看自己的提交、列出自己的提交。

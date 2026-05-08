@@ -99,7 +99,7 @@ std::optional<std::string> docker_inspect_format(const std::string& target, cons
 
 std::string docker_image() {
     const auto override = env_string("ATP_JUDGE_DOCKER_IMAGE");
-    return override.empty() ? "gcc:13" : override;
+    return override.empty() ? config::JUDGE_DOCKER_IMAGE : override;
 }
 
 std::filesystem::path work_root() {
